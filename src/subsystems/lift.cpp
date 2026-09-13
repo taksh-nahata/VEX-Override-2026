@@ -7,6 +7,7 @@
 #include "subsystems/lift.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace lift {
 
@@ -20,7 +21,19 @@ ez::PID sync_pid(0.2, 0.0, 0.0, 0);
 constexpr int STICK_DEADBAND = 10;
 constexpr double FLOOR_TOLERANCE_DEG = 10.0;
 
+// EXPERIMENTAL — how hard the motors are working while lowering is used to
+// detect "the pin just landed on something solid" (the stack/goal), same
+// idea as the abandoned stack-height idea but now in a scenario where it's
+// actually sound: something IS guaranteed to eventually be under a pin
+// that's being lowered onto a goal, unlike raising into open air. This is
+// still a totally unverified guess — print left_current_ma()/
+// right_current_ma() to the screen and watch them while manually lowering
+// onto a real stack to find the real number (normal descending load vs. the
+// spike when it actually lands), rather than trusting this value.
+constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
+
 bool homing = false;
+bool placing_contact = false;
 
 void initialize() {
   left_motor.tare_position();
@@ -40,6 +53,20 @@ double lowest_position() {
   return std::min(left_motor.get_position(), right_motor.get_position());
 }
 
+std::int32_t left_current_ma() {
+  return left_motor.get_current_draw();
+}
+
+std::int32_t right_current_ma() {
+  return right_motor.get_current_draw();
+}
+
+// True for the tick(s) after update() last stopped a downward move because
+// of a current spike (i.e. it thinks a pin just landed on something).
+bool touched_down() {
+  return placing_contact;
+}
+
 // Keeps both sides level regardless of who's driving the lift (manual or PID).
 double sync_correction() {
   double skew = left_motor.get_position() - right_motor.get_position();
@@ -57,11 +84,22 @@ void update(int stick) {
   if (std::abs(stick) > STICK_DEADBAND) {
     homing = false;
 
-    // Never drive below where the lift was at boot (position 0, set by
-    // tare_position() in initialize()) — ignore further "down" commands
-    // once EITHER side gets there, instead of grinding the mechanism
-    // against itself while waiting for the average to catch up.
-    if (stick < 0 && lowest_position() <= 0) stick = 0;
+    if (stick < 0) {
+      // Never drive below where the lift was at boot (position 0, set by
+      // tare_position() in initialize()) — ignore further "down" commands
+      // once EITHER side gets there, instead of grinding the mechanism
+      // against itself while waiting for the average to catch up.
+      if (lowest_position() <= 0) stick = 0;
+
+      // Placing: stop lowering the instant something solid is under the
+      // pin, instead of continuing to grind into it. Does NOT open the
+      // claw — that's still a deliberate, separate button press (see the
+      // header comment on why release stays manual).
+      placing_contact = left_current_ma() > CONTACT_CURRENT_MA || right_current_ma() > CONTACT_CURRENT_MA;
+      if (placing_contact) stick = 0;
+    } else {
+      placing_contact = false;
+    }
 
     left_motor.move(stick - correction);
     right_motor.move(stick + correction);

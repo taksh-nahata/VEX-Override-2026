@@ -166,12 +166,28 @@ void anti_tip_corrective_drive() {
 }
 
 // ----------------------------------------------------------------------------
+// DEBUG SCREEN
+// Live numbers for two bench tests: push the robot right and watch line 0 —
+// it should count up; if it counts down, flip DIR_ODOM_HORIZONTAL. Lower the
+// lift onto a real stack and watch line 1 — note where it jumps when it
+// actually lands vs. normal descending, then set CONTACT_CURRENT_MA
+// (lift.cpp) comfortably above the normal number but below the landing
+// spike. Line 1 also shows TOUCHED when a stop-on-contact just fired.
+// ----------------------------------------------------------------------------
+void debug_screen() {
+  pros::screen::print(TEXT_MEDIUM, 0, "odom (in): %.2f", horizontal_tracker.get());
+  pros::screen::print(TEXT_MEDIUM, 1, "lift mA L/R: %d / %d %s", lift::left_current_ma(), lift::right_current_ma(),
+                       lift::touched_down() ? "TOUCHED" : "");
+}
+
+// ----------------------------------------------------------------------------
 // DRIVER CONTROL
 // ----------------------------------------------------------------------------
 void opcontrol() {
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_COAST);
 
   while (true) {
+    debug_screen();
     anti_tip_apply();
     chassis.opcontrol_arcade_standard(ez::SPLIT);
     anti_tip_corrective_drive();  // overrides the above if actively tipping
