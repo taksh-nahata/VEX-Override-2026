@@ -1,6 +1,6 @@
 # What's left — Override 2026
 
-Plain-language status, updated 2026-09-12. "Code" items need a programmer; everything else is hardware/testing anyone on the team can do.
+Plain-language status, updated 2026-09-13. "Code" items need a programmer; everything else is hardware/testing anyone on the team can do.
 
 ## Done
 - All 9 motor/sensor ports wired and confirmed correct.
@@ -17,7 +17,7 @@ Plain-language status, updated 2026-09-12. "Code" items need a programmer; every
 - **Double check wheel size (2.75") and gear ratio** are exactly right — sounded right in testing, just worth confirming precisely.
 
 ## Decisions the team needs to make (not urgent)
-- **Aligner push sensor** — add a cheap limit switch to the aligner standoffs so the robot can auto-stop the instant it's aligned with the goal, instead of driving in by feel? Recommended, cheap, simple — just needs someone to say yes and give a port number.
+- **Aligner push sensor** — a cheap limit switch on the standoffs, but NOT to auto-stop the drivetrain (the standoffs hitting the goal already stop the robot on their own — cutting the motors on top of that could actually let the robot drift/settle away from the goal, since it runs in "coast" mode, not "hold"). The real value: use it to tell the driver "you're aligned" (so no more guessing), or to auto-trigger the next step. Still just an idea — needs someone to decide and give a port number.
 - **Should pin release become automatic?** Right now the driver still presses a button to actually drop the pin, even though the lift auto-stops when it senses the pin has landed. Making release automatic too would save one more button press, but removes the driver's last visual check before an action that can't be undone. Worth revisiting once the landing-sensor is well-tested and trusted.
 
 ## Tuning that needs the finished, weighed robot (normal, expected, not a problem)
