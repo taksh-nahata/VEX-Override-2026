@@ -2,8 +2,8 @@
 
 // ============================================================================
 // PID / SLEW CONSTANTS
-// Starting point carried over from last season's tuning; retune for this
-// year's robot (different weight/gearing will shift these).
+// TODO(tune): carried over from last season's different robot — every
+// number here needs retuning for this year's weight/gearing.
 // ============================================================================
 void default_constants() {
   chassis.pid_drive_constants_set(20.0, 0.0, 100.0);
@@ -25,7 +25,8 @@ void default_constants() {
 
 // ============================================================================
 // AUTONS
-// Fill these in once this season's routines are worked out.
+// TODO(missing): all three are empty stubs — write actual routines once
+// driving and placement mechanics are dialed in.
 // ============================================================================
 void auton_skills() {}
 void auton_button_1() {}

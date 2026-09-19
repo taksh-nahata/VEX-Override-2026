@@ -32,13 +32,14 @@ constexpr int PORT_IMU = 10;  // confirmed port
 // reading should increase; flip the sign if it doesn't).
 constexpr int DIR_ODOM_HORIZONTAL = -1;  // confirmed by push test 2026-09-18
 constexpr int PORT_ODOM_HORIZONTAL = 13 * DIR_ODOM_HORIZONTAL;  // confirmed port
-constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches, pretty sure — double check against the actual wheel
+constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — TODO(verify): "pretty sure," never measured directly
 // Front-back distance from the tracking wheel to the robot's true turning
-// center (measure with a tape measure). Since it's a back tracker this is a
-// positive number — how far back of center it sits. NOT the left-right offset:
-// EZ-Template's back/front trackers only correct for front-back placement: see
+// center. Since it's a back tracker this is a positive number — how far
+// back of center it sits. NOT the left-right offset: EZ-Template's
+// back/front trackers only correct for front-back placement: see
 // https://ez-robotics.github.io/EZ-Template/tutorials/tuning_tracking_wheel_width
 // Being off-center to the right is fine and doesn't need its own parameter here.
+// TODO(verify): measure with a tape measure — never done, still 0.0.
 constexpr double ODOM_HORIZONTAL_OFFSET = 0.0;
 
 // --- DR4B lift (2 motors, dual-side synced PID) --- confirmed ports
@@ -46,6 +47,13 @@ constexpr double ODOM_HORIZONTAL_OFFSET = 0.0;
 // command instead of up — confirmed by testing R1, not by re-derived
 // guesswork this time. Both flipped together to invert overall polarity
 // while keeping left/right mirrored relative to each other.
+//
+// TODO(mechanical): the left side's gear is seated one tooth off from the
+// right (found 2026-09-18) — a fixed mechanical offset no amount of
+// encoder-based sync correction (lift.cpp) can fix, since it measures
+// motor rotation, not actual arm position. Needs the gear physically
+// reseated, not a code change; expect crookedness and false
+// TOUCHED/CEILING readings (lift.cpp) until then.
 constexpr int DIR_LIFT_L = 1;
 constexpr int DIR_LIFT_R = -1;
 constexpr int PORT_LIFT_L = 8 * DIR_LIFT_L;

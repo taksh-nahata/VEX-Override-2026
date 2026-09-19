@@ -10,7 +10,8 @@ namespace toggle {
 pros::Motor spinner(PORT_TOGGLE_SPINNER, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Optical color_sensor(PORT_TOGGLE_COLOR_SENSOR);
 
-// TODO: calibrate against the real toggles once the sensor is mounted.
+// TODO(tune): calibrate against the real toggles under real field lighting —
+// these are unverified placeholder guesses.
 constexpr double HUE_RED_MAX = 20.0;
 constexpr double HUE_YELLOW_MIN = 45.0;
 constexpr double HUE_YELLOW_MAX = 65.0;
