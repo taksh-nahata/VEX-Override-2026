@@ -178,6 +178,7 @@ void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 0, "odom (in): %.2f", horizontal_tracker.get());
   pros::screen::print(TEXT_MEDIUM, 1, "lift mA L/R: %d / %d %s", lift::left_current_ma(), lift::right_current_ma(),
                        lift::touched_down() ? "TOUCHED" : "");
+  pros::screen::print(TEXT_MEDIUM, 2, "floor limit: %s (DOWN to toggle)", lift::floor_limit_on() ? "ON" : "OFF");
 }
 
 // ----------------------------------------------------------------------------
@@ -194,6 +195,11 @@ void opcontrol() {
 
     // Claw
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) claw::toggle();
+
+    // Floor limit toggle — DOWN turns the boot-position floor limit on/off,
+    // for troubleshooting (e.g. ruling it in/out of the crooked-lift issue)
+    // without editing code. Status shown on line 2 of the debug screen.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) lift::toggle_floor_limit();
 
     // Lift: R1 = up, R2 = down. Nothing else.
     if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {

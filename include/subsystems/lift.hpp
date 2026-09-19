@@ -29,6 +29,11 @@ std::int32_t left_current_ma();
 std::int32_t right_current_ma();
 
 // True right after update() stops a downward move due to a current spike.
+// Not the same thing as the floor limit below — separate, independent checks.
 bool touched_down();
+
+// Toggles the boot-position floor limit on/off (see main.cpp for the button).
+void toggle_floor_limit();
+bool floor_limit_on();
 
 }  // namespace lift

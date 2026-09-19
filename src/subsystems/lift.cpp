@@ -34,6 +34,7 @@ constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
 
 bool homing = false;
 bool placing_contact = false;
+bool floor_limit_enabled = true;
 
 void initialize() {
   left_motor.tare_position();
@@ -62,9 +63,22 @@ std::int32_t right_current_ma() {
 }
 
 // True for the tick(s) after update() last stopped a downward move because
-// of a current spike (i.e. it thinks a pin just landed on something).
+// of a current spike (i.e. it thinks a pin just landed on something). NOT
+// the same thing as the floor limit below — this is current-based, the
+// floor limit is position-based, they're independent checks.
 bool touched_down() {
   return placing_contact;
+}
+
+// Toggle for the boot-position floor limit, so it can be switched off while
+// troubleshooting (e.g. the crooked-lift issue) without editing code, and
+// back on afterward. See main.cpp for which button toggles this.
+void toggle_floor_limit() {
+  floor_limit_enabled = !floor_limit_enabled;
+}
+
+bool floor_limit_on() {
+  return floor_limit_enabled;
 }
 
 // Keeps both sides level regardless of who's driving the lift (manual or
@@ -98,15 +112,26 @@ void update(int stick) {
       // Never drive below where the lift was at boot (position 0, set by
       // tare_position() in initialize()) — ignore further "down" commands
       // once EITHER side gets there, instead of grinding the mechanism
-      // against itself while waiting for the average to catch up.
-      if (lowest_position() <= 0) stick = 0;
+      // against itself while waiting for the average to catch up. A true
+      // stop, not just zeroing the driver's input — correction doesn't get
+      // to sneak the motors past this either. Toggleable (see main.cpp).
+      if (floor_limit_enabled && lowest_position() <= 0) {
+        placing_contact = false;
+        left_motor.move(0);
+        right_motor.move(0);
+        return;
+      }
 
       // Placing: stop lowering the instant something solid is under the
-      // pin, instead of continuing to grind into it. Does NOT open the
-      // claw — that's still a deliberate, separate button press (see the
-      // header comment on why release stays manual).
+      // pin, instead of continuing to grind into it. Also a true stop.
+      // Does NOT open the claw — that's still a deliberate, separate
+      // button press (see the header comment on why release stays manual).
       placing_contact = left_current_ma() > CONTACT_CURRENT_MA || right_current_ma() > CONTACT_CURRENT_MA;
-      if (placing_contact) stick = 0;
+      if (placing_contact) {
+        left_motor.move(0);
+        right_motor.move(0);
+        return;
+      }
     } else {
       placing_contact = false;
     }
