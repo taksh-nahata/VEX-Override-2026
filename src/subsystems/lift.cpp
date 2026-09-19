@@ -35,6 +35,7 @@ constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
 bool homing = false;
 bool placing_contact = false;
 bool floor_limit_enabled = true;
+double floor_reference = 0;  // updated to "here" each time the limit is re-enabled
 
 void initialize() {
   left_motor.tare_position();
@@ -70,11 +71,15 @@ bool touched_down() {
   return placing_contact;
 }
 
-// Toggle for the boot-position floor limit, so it can be switched off while
+// Toggle for the floor limit, so it can be switched off while
 // troubleshooting (e.g. the crooked-lift issue) without editing code, and
-// back on afterward. See main.cpp for which button toggles this.
+// back on afterward. Turning it back ON captures wherever the lift is AT
+// THAT MOMENT as the new floor — not the original boot position — so you
+// can disable it, reposition, and re-enable to set a new floor on the fly.
+// See main.cpp for which button toggles this.
 void toggle_floor_limit() {
   floor_limit_enabled = !floor_limit_enabled;
+  if (floor_limit_enabled) floor_reference = lowest_position();
 }
 
 bool floor_limit_on() {
@@ -109,13 +114,13 @@ void update(int stick) {
     homing = false;
 
     if (stick < 0) {
-      // Never drive below where the lift was at boot (position 0, set by
-      // tare_position() in initialize()) — ignore further "down" commands
-      // once EITHER side gets there, instead of grinding the mechanism
-      // against itself while waiting for the average to catch up. A true
-      // stop, not just zeroing the driver's input — correction doesn't get
-      // to sneak the motors past this either. Toggleable (see main.cpp).
-      if (floor_limit_enabled && lowest_position() <= 0) {
+      // Never drive below floor_reference (wherever the limit was last
+      // (re-)enabled at) — ignore further "down" commands once EITHER side
+      // gets there, instead of grinding the mechanism against itself while
+      // waiting for the average to catch up. A true stop, not just zeroing
+      // the driver's input — correction doesn't get to sneak the motors
+      // past this either. Toggleable (see main.cpp).
+      if (floor_limit_enabled && lowest_position() <= floor_reference) {
         placing_contact = false;
         left_motor.move(0);
         right_motor.move(0);
