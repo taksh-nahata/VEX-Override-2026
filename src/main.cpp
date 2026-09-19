@@ -1,4 +1,5 @@
 #include "main.h"
+#include "logo_image.h"
 
 // ----------------------------------------------------------------------------
 // GLOBAL DEFINITIONS
@@ -27,22 +28,30 @@ ez::tracking_wheel horizontal_tracker(PORT_ODOM_HORIZONTAL, ODOM_HORIZONTAL_WHEE
 
 // ----------------------------------------------------------------------------
 // BOOT SPLASH
-// A code-drawn animation so the screen isn't blank while everything else
-// spins up. Runs before the auton selector claims the screen. Swap for a
-// real logo later (LVGL image, via the PROS image-converter tool) if wanted.
+// Shows the real team logo via pros::screen::copy_area, which blits a raw
+// pixel buffer directly and doesn't touch LVGL at all. That matters here:
+// a from-scratch LVGL selector UI was attempted and reverted (2026-09-18)
+// after discovering this build's firmware/liblvgl.a is compiled as an
+// older v8-style LVGL, while this project's LVGL *headers* describe v9 —
+// confirmed by inspecting the library's actual exported symbols
+// (lv_img_create/lv_btn_create present, lv_image_create/lv_button_create/
+// lv_color_hex/lv_obj_center/lv_screen_active absent). The two versions'
+// image-data struct layouts genuinely differ, so code compiled against
+// this project's v9-shaped headers could silently misinterpret data if
+// handed to the real (v8) lv_img_set_src. EZ-Template's own auton selector
+// is unaffected — it ships compiled against this same library, not
+// rebuilt from these headers — so it stays as the actual selector UI.
 // ----------------------------------------------------------------------------
 void splash_screen() {
   pros::screen::set_pen(pros::Color::black);
   pros::screen::fill_rect(0, 0, 480, 240);
-  pros::screen::set_pen(pros::Color::cyan);
 
-  pros::screen::print(TEXT_MEDIUM_CENTER, 4, "TEAM BLUE VEX");
-  for (int w = 0; w <= 300; w += 15) {
-    pros::screen::fill_rect(90, 110, 90 + w, 130);
-    pros::delay(20);
-  }
+  int x0 = (480 - LOGO_WIDTH) / 2;
+  int y0 = (240 - LOGO_HEIGHT) / 2;
+  pros::screen::copy_area(x0, y0, x0 + LOGO_WIDTH - 1, y0 + LOGO_HEIGHT - 1, const_cast<std::uint32_t*>(logo_pixels),
+                           LOGO_WIDTH);
 
-  pros::delay(400);
+  pros::delay(1800);
   pros::screen::set_pen(pros::Color::black);
   pros::screen::fill_rect(0, 0, 480, 240);
 }
