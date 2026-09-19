@@ -179,6 +179,7 @@ void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 1, "lift mA L/R: %d / %d %s", lift::left_current_ma(), lift::right_current_ma(),
                        lift::touched_down() ? "TOUCHED" : "");
   pros::screen::print(TEXT_MEDIUM, 2, "floor limit: %s (DOWN to toggle)", lift::floor_limit_on() ? "ON" : "OFF");
+  pros::screen::print(TEXT_MEDIUM, 3, "pitch/roll: %.1f / %.1f", chassis.imu.get_pitch(), chassis.imu.get_roll());
 }
 
 // ----------------------------------------------------------------------------
