@@ -31,3 +31,17 @@ void default_constants() {
 void auton_skills() {}
 void auton_button_1() {}
 void auton_button_2() {}
+
+// ============================================================================
+// PID TUNER TEST MOVE
+// Drives forward 24in (exercises Drive PID), then turns 90deg (exercises
+// Turn PID — the IMU/rotation-based one). Press B in opcontrol while the
+// tuner is on (X toggles it) to run this; edit the numbers below to test
+// whatever distance/angle you're actually tuning against.
+// ============================================================================
+void tune_test() {
+  chassis.pid_drive_set(24_in, 90, true);
+  chassis.pid_wait();
+  chassis.pid_turn_set(90_deg, 90, true);
+  chassis.pid_wait();
+}

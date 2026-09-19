@@ -43,6 +43,7 @@ void initialize() {
 
   default_constants();
   chassis.initialize();
+  chassis.pid_tuner_print_brain_set(true);  // see opcontrol()'s X/B bindings
 
   lift::initialize();
   toggle::initialize();
@@ -238,7 +239,24 @@ void opcontrol() {
   match_clock_reset();
 
   while (true) {
-    debug_screen();
+    // Drivetrain PID tuner (EZ-Template built-in) — X toggles it on/off, B
+    // runs tune_test() (see autons.cpp) to actually exercise whichever PID
+    // is selected. Live values print to the brain
+    // (pid_tuner_print_brain_set(true) in initialize()); once on, Up/Down
+    // picks which PID set (Drive/Turn/Swing/etc — Turn is the one that uses
+    // the IMU rotation sensor to spin in place), Left/Right adjusts the
+    // selected P/I/D value. Skips debug_screen() while on so they don't
+    // fight over the same brain lines, and skips the floor-limit/toggle-color
+    // UP/DOWN bindings below so they don't double-fire against the tuner's
+    // own Up/Down.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) chassis.pid_tuner_toggle();
+    chassis.pid_tuner_iterate();
+    if (chassis.pid_tuner_enabled()) {
+      if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) tune_test();
+    } else {
+      debug_screen();
+    }
+
     controller_feedback();
     match_clock_update();
     anti_tip_apply();
@@ -251,12 +269,16 @@ void opcontrol() {
     // Floor limit toggle — DOWN turns it on/off, for troubleshooting the
     // crooked-lift issue without editing code. Status on line 2. (The
     // ceiling has no equivalent toggle — it's automatic, see lift.cpp.)
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) lift::toggle_floor_limit();
+    // Skipped while the PID tuner owns DOWN (see above).
+    if (!chassis.pid_tuner_enabled() && master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
+      lift::toggle_floor_limit();
+    }
 
     // Toggle target color — UP swaps red/blue (whichever alliance we're
     // on), Y sets yellow directly. Status on line 4, plus a controller
-    // print so the driver sees it without looking at the brain.
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
+    // print so the driver sees it without looking at the brain. UP skipped
+    // while the PID tuner owns it (see above); Y is untouched by the tuner.
+    if (!chassis.pid_tuner_enabled() && master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
       toggle::toggle_target_red_blue();
       master.print(0, 0, "target: %s", toggle::color_name(toggle::target_color()));
     }
