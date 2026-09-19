@@ -18,6 +18,19 @@ pros::Motor right_motor(PORT_LIFT_R, pros::v5::MotorGears::green, pros::v5::Moto
 ez::PID height_pid(0.4, 0.0, 1.0, 0);
 ez::PID sync_pid(0.2, 0.0, 0.0, 0);
 
+// Gravity feedforward: a constant push added on top of the PID output so
+// the PID itself only has to correct leftover error instead of fighting a
+// known, constant disturbance (gravity) every tick — the standard fix for
+// a PID that sags/droops while holding something up (see
+// https://docs.wpilib.org/en/stable/docs/software/advanced-controls/introduction/tuning-vertical-arm.html).
+// A DR4B isn't a simple elevator (constant kG) or a simple single-jointed
+// arm (kCos * cos(angle)) — its actual holding torque varies with the
+// four-bar's geometry through the stroke — but a flat constant is a
+// reasonable, simple starting point. TODO: tune to the smallest value that
+// stops it sagging/drifting down on its own; too much will fight the
+// driver trying to lower it and add to the current draw TOUCHED reacts to.
+constexpr int GRAVITY_HOLD = 15;
+
 constexpr int STICK_DEADBAND = 10;
 constexpr double FLOOR_TOLERANCE_DEG = 10.0;
 
@@ -153,7 +166,7 @@ void update(int stick) {
   placing_contact = false;
 
   if (homing) {
-    double out = height_pid.compute(position());
+    double out = height_pid.compute(position()) + GRAVITY_HOLD;
     left_motor.move(out - correction);
     right_motor.move(out + correction);
     if (std::fabs(position()) < FLOOR_TOLERANCE_DEG) homing = false;
