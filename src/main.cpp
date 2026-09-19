@@ -154,6 +154,8 @@ void anti_tip_corrective_drive() {
 //            and CEILING_CURRENT_MA there.
 //   Line 2 — floor limit status (DOWN toggles it).
 //   Line 3 — IMU pitch/roll, for the anti-tip sign check above.
+//   Line 4 — toggle target color (UP swaps red/blue, Y sets yellow) vs.
+//            what the sensor currently sees.
 // ----------------------------------------------------------------------------
 void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 0, "odom (in): %.2f", horizontal_tracker.get());
@@ -164,6 +166,8 @@ void debug_screen() {
 
   pros::screen::print(TEXT_MEDIUM, 2, "floor limit: %s (DOWN to toggle)", lift::floor_limit_on() ? "ON" : "OFF");
   pros::screen::print(TEXT_MEDIUM, 3, "pitch/roll: %.1f / %.1f", chassis.imu.get_pitch(), chassis.imu.get_roll());
+  pros::screen::print(TEXT_MEDIUM, 4, "toggle target: %s  sees: %s", toggle::color_name(toggle::target_color()),
+                       toggle::color_name(toggle::detect()));
 }
 
 // ----------------------------------------------------------------------------
@@ -181,7 +185,7 @@ void debug_screen() {
 void controller_feedback() {
   static bool was_touched = false;
   static bool was_ceiling = false;
-  static bool was_red = false;
+  static bool was_on_target = false;
 
   bool touched = lift::touched_down();
   if (touched && !was_touched) master.rumble(".");
@@ -191,9 +195,9 @@ void controller_feedback() {
   if (at_ceiling && !was_ceiling) master.rumble("..");
   was_ceiling = at_ceiling;
 
-  bool red = toggle::detect() == toggle::Color::RED;
-  if (red && !was_red) master.rumble("-");
-  was_red = red;
+  bool on_target = toggle::detect() == toggle::target_color();
+  if (on_target && !was_on_target) master.rumble("-");
+  was_on_target = on_target;
 }
 
 // ----------------------------------------------------------------------------
@@ -249,6 +253,18 @@ void opcontrol() {
     // ceiling has no equivalent toggle — it's automatic, see lift.cpp.)
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) lift::toggle_floor_limit();
 
+    // Toggle target color — UP swaps red/blue (whichever alliance we're
+    // on), Y sets yellow directly. Status on line 4, plus a controller
+    // print so the driver sees it without looking at the brain.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
+      toggle::toggle_target_red_blue();
+      master.print(0, 0, "target: %s", toggle::color_name(toggle::target_color()));
+    }
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)) {
+      toggle::set_target_yellow();
+      master.print(0, 0, "target: %s", toggle::color_name(toggle::target_color()));
+    }
+
     // Lift: R1 = up, R2 = down. Nothing else.
     if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
       lift::update(127);
@@ -259,11 +275,11 @@ void opcontrol() {
     }
 
     // Toggle spinner — moved off R1 (that's the lift now). Spins while
-    // held, but also stops early the instant red is detected.
+    // held, but also stops early the instant it reaches the target color.
     // TODO(tune): toggle.cpp's hue thresholds are still unverified
-    // placeholder guesses — this won't reliably stop on real red until
-    // those are calibrated against the actual sensor and toggle.
-    if (master.get_digital(pros::E_CONTROLLER_DIGITAL_L2) && toggle::detect() != toggle::Color::RED) {
+    // placeholder guesses — this won't reliably stop on the real colors
+    // until those are calibrated against the actual sensor and toggle.
+    if (master.get_digital(pros::E_CONTROLLER_DIGITAL_L2) && toggle::detect() != toggle::target_color()) {
       toggle::spin(127);
     } else {
       toggle::spin(0);

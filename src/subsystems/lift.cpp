@@ -66,12 +66,25 @@ constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
 // not assumed identical, once both are actually measured.
 constexpr std::int32_t CEILING_CURRENT_MA = 1500;
 
+// TODO(tune): how many consecutive ticks (~20ms each) current has to stay
+// above threshold before either contact check actually fires. Motors draw
+// a brief inrush current spike just from starting to move under load —
+// without this, a single-tick reading right as R1/R2 is first pressed
+// could exceed the threshold, stop the motors, current drops since
+// they're stopped, then the very next tick it tries again and spikes
+// again — a rapid stop-start stutter ("glitching") instead of a clean
+// contact stop. Requiring a few consecutive high readings filters that
+// out while still catching a genuine sustained stall.
+constexpr int CONTACT_DEBOUNCE_TICKS = 5;
+
 // ============================================================================
 // STATE
 // ============================================================================
 bool homing = false;
 bool placing_contact = false;  // true right after a lowering move stopped on contact (see touched_down())
 bool at_ceiling = false;       // true right after a raising move stopped on contact (see at_ceiling_now())
+int contact_high_ticks = 0;    // consecutive ticks current has read high while lowering
+int ceiling_high_ticks = 0;    // consecutive ticks current has read high while raising
 bool floor_limit_enabled = true;
 double floor_reference = 0;  // updated to "here" each time the floor limit is re-enabled
 
@@ -193,23 +206,28 @@ void update(int stick) {
 
     if (stick < 0) {
       at_ceiling = false;
+      ceiling_high_ticks = 0;
 
       // Floor: never drive below floor_reference — a true stop, not just
       // zeroing the driver's input; correction doesn't get to sneak the
       // motors past this either.
       if (floor_limit_enabled && lowest_position() <= floor_reference) {
         placing_contact = false;
+        contact_high_ticks = 0;
         left_motor.move(0);
         right_motor.move(0);
         return;
       }
 
-      // Placing: stop lowering the instant something solid is under the
-      // pin, instead of continuing to grind into it. Also a true stop.
-      // Does NOT open the claw — release stays a deliberate, separate
-      // button press, since it's the one irreversible step here (can't
-      // un-drop a pin) and this detection is still unverified.
-      placing_contact = left_current_ma() > CONTACT_CURRENT_MA || right_current_ma() > CONTACT_CURRENT_MA;
+      // Placing: stop lowering once something solid is under the pin for
+      // several consecutive ticks in a row (see CONTACT_DEBOUNCE_TICKS),
+      // instead of continuing to grind into it. Also a true stop. Does NOT
+      // open the claw — release stays a deliberate, separate button press,
+      // since it's the one irreversible step here (can't un-drop a pin)
+      // and this detection is still unverified.
+      bool current_high = left_current_ma() > CONTACT_CURRENT_MA || right_current_ma() > CONTACT_CURRENT_MA;
+      contact_high_ticks = current_high ? contact_high_ticks + 1 : 0;
+      placing_contact = contact_high_ticks >= CONTACT_DEBOUNCE_TICKS;
       if (placing_contact) {
         left_motor.move(0);
         right_motor.move(0);
@@ -217,11 +235,16 @@ void update(int stick) {
       }
     } else {
       placing_contact = false;
+      contact_high_ticks = 0;
 
-      // Ceiling: stop raising the instant the mechanism resists hard
-      // enough to spike current — see at_ceiling_now() above for why this
-      // doesn't need a manual calibration step the way the floor did.
-      at_ceiling = left_current_ma() > CEILING_CURRENT_MA || right_current_ma() > CEILING_CURRENT_MA;
+      // Ceiling: stop raising once the mechanism resists hard enough to
+      // spike current for several consecutive ticks in a row — see
+      // at_ceiling_now() above for why this doesn't need a manual
+      // calibration step the way the floor did, and CONTACT_DEBOUNCE_TICKS
+      // for why it's not a single-tick check.
+      bool current_high = left_current_ma() > CEILING_CURRENT_MA || right_current_ma() > CEILING_CURRENT_MA;
+      ceiling_high_ticks = current_high ? ceiling_high_ticks + 1 : 0;
+      at_ceiling = ceiling_high_ticks >= CONTACT_DEBOUNCE_TICKS;
       if (at_ceiling) {
         left_motor.move(0);
         right_motor.move(0);
@@ -234,11 +257,14 @@ void update(int stick) {
     return;
   }
 
-  // Neither button held. Both flags reset here too, not just above — they
-  // used to only update inside the active-stick branch, so the screen
-  // could keep showing TOUCHED/CEILING long after you'd let go entirely.
+  // Neither button held. Both flags (and their debounce counters) reset
+  // here too, not just above — they used to only update inside the
+  // active-stick branch, so the screen could keep showing TOUCHED/CEILING
+  // long after you'd let go entirely.
   placing_contact = false;
   at_ceiling = false;
+  contact_high_ticks = 0;
+  ceiling_high_ticks = 0;
 
   if (homing) {
     double out = height_pid.compute(position()) + GRAVITY_HOLD;
