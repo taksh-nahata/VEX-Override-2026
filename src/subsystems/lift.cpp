@@ -67,10 +67,20 @@ bool touched_down() {
   return placing_contact;
 }
 
-// Keeps both sides level regardless of who's driving the lift (manual or PID).
+// Keeps both sides level regardless of who's driving the lift (manual or
+// PID). Capped so it can only ever nudge, never override — an uncapped
+// correction grows with however out-of-sync the sides currently are, and
+// once it's bigger than the commanded stick value it flips that side's
+// sign entirely: e.g. holding R1 (both sides should rise) but a large
+// correction pushes stick - correction negative, so the left side drops
+// instead. That's the "R1/R2 sometimes goes the wrong way" bug — it gets
+// worse the more the two sides have drifted apart since boot, which is why
+// it's intermittent rather than every time.
 double sync_correction() {
   double skew = left_motor.get_position() - right_motor.get_position();
-  return sync_pid.compute_error(-skew, skew);
+  double correction = sync_pid.compute_error(-skew, skew);
+  constexpr double MAX_CORRECTION = 30;  // TODO: tune — smallest value that still keeps both sides level
+  return std::clamp(correction, -MAX_CORRECTION, MAX_CORRECTION);
 }
 
 void go_to_floor() {
