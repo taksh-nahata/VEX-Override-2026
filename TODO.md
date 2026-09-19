@@ -9,7 +9,12 @@ Plain-language status, updated 2026-09-18. "Code" items need a programmer; every
 - Drivetrain and lift both confirmed driving correctly.
 - Lift has: a floor limit (won't drive below where it started), an automatic ceiling limit (stops before the gear cartridge skips at the top — no calibration needed, it just senses it), and a "landed on something" stop while lowering.
 - Physical anti-tip bar — in progress.
+- Team logo now shows on the brain screen at boot.
+- Controller rumble on key events (pin landed, hit ceiling, red detected) and an endgame warning at the 20-second mark — the brain's screen isn't visible to the driver mid-match, so this is the feedback that actually reaches them.
 - Code is backed up on GitHub, with setup instructions for anyone joining the team.
+
+## Found something worth knowing about the toolchain itself
+- Tried building a fully custom on-screen menu (logo + our own buttons, replacing the generic-looking selector) and hit a real wall: the actual compiled screen-drawing library on this PROS install is an older version than the instructions (headers) describe. Not a code mistake — verified directly against the compiled file. Building custom on-screen buttons safely would need real testing against the exact library first, so for now the logo shows on its own at boot and the existing (if plainer) selector still handles picking the autonomous routine. Nothing broken, just scoped back to what's provably safe.
 
 ## Known mechanical issue — top priority, blocks a lot of the software tuning below
 - **Left lift motor's gear is seated one tooth off from the right side.** This is a real, physical mechanical mismatch, not a software bug — it's why the lift looks crooked, and likely why the "pin landed" sensor fires randomly (the software keeps straining to sync two sides that physically can't agree, which shows up as extra current). Needs the gear pulled and reseated correctly. Software can't fix this, and the current-based tuning items below will keep giving unreliable numbers until it's fixed.
