@@ -191,13 +191,75 @@ void debug_screen() {
 }
 
 // ----------------------------------------------------------------------------
+// CONTROLLER FEEDBACK
+// The brain's own screen (debug_screen() above) is only useful for bench
+// testing — the driver can't see it mid-match, it's mounted on the robot.
+// This is the actual driver-facing feedback: the controller's rumble motor
+// and its own small 3-line screen. Rumble fires once per event (edge-
+// triggered), not every tick the condition holds, or TOUCHED/CEILING would
+// buzz continuously for as long as you're pressed against whatever tripped
+// them. Controller print is rate-limited separately — it's a slow wireless
+// link ("controller text update rate is slow" per the PROS docs); spamming
+// it every 20ms tick lags the whole link, not just the display.
+// ----------------------------------------------------------------------------
+void controller_feedback() {
+  static bool was_touched = false;
+  static bool was_ceiling = false;
+  static bool was_red = false;
+
+  bool touched = lift::touched_down();
+  if (touched && !was_touched) master.rumble(".");
+  was_touched = touched;
+
+  bool at_ceiling = lift::at_ceiling_now();
+  if (at_ceiling && !was_ceiling) master.rumble("..");
+  was_ceiling = at_ceiling;
+
+  bool red = toggle::detect() == toggle::Color::RED;
+  if (red && !was_red) master.rumble("-");
+  was_red = red;
+}
+
+// ----------------------------------------------------------------------------
+// MATCH CLOCK
+// Override's driver period is a fixed 1:45 (105s) per the game manual. The
+// V5 competition switch doesn't broadcast time remaining to user code, so
+// this just starts a timer the moment opcontrol() begins and counts down —
+// accurate for a real timed match, meaningless during an untimed bench
+// test (it'll still fire the endgame warning at 85s in regardless of
+// whether anyone's actually 20s from the real end of anything).
+// ----------------------------------------------------------------------------
+constexpr std::uint32_t MATCH_DURATION_MS = 105000;
+constexpr std::uint32_t ENDGAME_WARNING_MS = 20000;  // Override's contested-Midfield window
+
+std::uint32_t opcontrol_start_ms = 0;
+bool endgame_warned = false;
+
+void match_clock_reset() {
+  opcontrol_start_ms = pros::millis();
+  endgame_warned = false;
+}
+
+void match_clock_update() {
+  std::uint32_t elapsed = pros::millis() - opcontrol_start_ms;
+  if (!endgame_warned && elapsed >= MATCH_DURATION_MS - ENDGAME_WARNING_MS) {
+    endgame_warned = true;
+    master.rumble("- - -");
+    master.print(0, 0, "ENDGAME: MIDFIELD");
+  }
+}
+
+// ----------------------------------------------------------------------------
 // DRIVER CONTROL
 // ----------------------------------------------------------------------------
 void opcontrol() {
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_COAST);
+  match_clock_reset();
 
   while (true) {
     debug_screen();
+    controller_feedback();
+    match_clock_update();
     anti_tip_apply();
     chassis.opcontrol_arcade_standard(ez::SPLIT);
     anti_tip_corrective_drive();  // overrides the above if actively tipping
