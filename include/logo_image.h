@@ -2,19 +2,38 @@
 
 #include <cstdint>
 
-// Team logo ("blue."), generated from the PNG the team provided by a
-// one-off script — a plain raw pixel buffer (0x00RRGGBB per pixel,
-// matching pros::Color's own format), blitted with pros::screen::copy_area.
-// Deliberately NOT an LVGL image (lv_img_dsc_t/lv_image_dsc_t): this
-// project's LVGL headers describe v9's API, but the actual compiled
-// firmware/liblvgl.a is an older v8-style build (confirmed by checking its
-// real exported symbols — lv_img_create/lv_btn_create, not
-// lv_image_create/lv_button_create, and no lv_color_hex/lv_obj_center/
-// lv_screen_active at all). The two struct layouts for image data are
-// genuinely different, so feeding v9-shaped data to whatever the real
-// v8 lv_img_set_src expects would risk silent corruption, not just a
-// wrong picture. copy_area sidesteps LVGL entirely. Regenerate the same
-// way if the logo ever changes.
-extern const std::int32_t LOGO_WIDTH;
-extern const std::int32_t LOGO_HEIGHT;
-extern const std::uint32_t logo_pixels[];
+// Team logo ("blue."), generated from the PNG the team provided.
+//
+// PROS kernel 4 bundles LVGL 8.3.4 as the actually-compiled
+// firmware/liblvgl.a (confirmed via `nm` on the library, and independently
+// via PROS's own release notes) — but this project's liblvgl HEADERS
+// describe LVGL v9, whose lv_image_dsc_t has a different bit-packed
+// layout. Using the project's own (wrong-version) struct would risk
+// misreading memory. LvImgHeaderV8/LvImgDscV8 below are copied
+// field-for-field from LVGL's real, tagged v8.3.4 source
+// (src/draw/lv_img_buf.h: lv_img_header_t/lv_img_dsc_t) instead of
+// guessed — bitfield packing is a compiler+field-order property, not
+// tied to which header/name declares it, so an identical local
+// declaration compiled by the same toolchain lays out identically to
+// what the real library expects. Regenerate the same way if the logo
+// ever changes.
+struct LvImgHeaderV8 {
+  std::uint32_t cf : 5;           // color format — see LV_IMG_CF_TRUE_COLOR_V8 below
+  std::uint32_t always_zero : 3;  // must be 0
+  std::uint32_t reserved : 2;
+  std::uint32_t w : 11;
+  std::uint32_t h : 11;
+};
+
+struct LvImgDscV8 {
+  LvImgHeaderV8 header;
+  std::uint32_t data_size;
+  const std::uint8_t* data;
+};
+
+// LVGL v8.3.4's LV_IMG_CF_TRUE_COLOR enum value — "color format and depth
+// should match LV_COLOR settings" (LV_COLOR_DEPTH is 32 in this build's
+// lv_conf.h), stored as {blue, green, red, alpha} bytes per pixel.
+constexpr std::uint32_t LV_IMG_CF_TRUE_COLOR_V8 = 4;
+
+extern const LvImgDscV8 team_logo;

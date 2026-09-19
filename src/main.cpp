@@ -1,5 +1,4 @@
 #include "main.h"
-#include "logo_image.h"
 
 // ----------------------------------------------------------------------------
 // GLOBAL DEFINITIONS
@@ -27,60 +26,28 @@ ez::Drive chassis(
 ez::tracking_wheel horizontal_tracker(PORT_ODOM_HORIZONTAL, ODOM_HORIZONTAL_WHEEL_DIAMETER, ODOM_HORIZONTAL_OFFSET);
 
 // ----------------------------------------------------------------------------
-// BOOT SPLASH
-// Shows the real team logo via pros::screen::copy_area, which blits a raw
-// pixel buffer directly and doesn't touch LVGL at all. That matters here:
-// a from-scratch LVGL selector UI was attempted and reverted (2026-09-18)
-// after discovering this build's firmware/liblvgl.a is compiled as an
-// older v8-style LVGL, while this project's LVGL *headers* describe v9 —
-// confirmed by inspecting the library's actual exported symbols
-// (lv_img_create/lv_btn_create present, lv_image_create/lv_button_create/
-// lv_color_hex/lv_obj_center/lv_screen_active absent). The two versions'
-// image-data struct layouts genuinely differ, so code compiled against
-// this project's v9-shaped headers could silently misinterpret data if
-// handed to the real (v8) lv_img_set_src. EZ-Template's own auton selector
-// is unaffected — it ships compiled against this same library, not
-// rebuilt from these headers — so it stays as the actual selector UI.
-// ----------------------------------------------------------------------------
-void splash_screen() {
-  pros::screen::set_pen(pros::Color::black);
-  pros::screen::fill_rect(0, 0, 480, 240);
-
-  int x0 = (480 - LOGO_WIDTH) / 2;
-  int y0 = (240 - LOGO_HEIGHT) / 2;
-  pros::screen::copy_area(x0, y0, x0 + LOGO_WIDTH - 1, y0 + LOGO_HEIGHT - 1, const_cast<std::uint32_t*>(logo_pixels),
-                           LOGO_WIDTH);
-
-  pros::delay(1800);
-  pros::screen::set_pen(pros::Color::black);
-  pros::screen::fill_rect(0, 0, 480, 240);
-}
-
-// ----------------------------------------------------------------------------
 // INITIALIZATION
+// ui::init() (src/ui.cpp) owns the whole screen: logo splash straight into
+// a real button-based selector, replacing both the old hand-drawn splash
+// and EZ-Template's own selector. It calls a few LVGL functions by their
+// real (v8.3.4) names via manual declarations, since this build's
+// firmware/liblvgl.a is compiled as LVGL 8.3.4 while this project's LVGL
+// headers describe v9 — see ui.cpp's header comment for the full story and
+// what was verified before relying on it. ez::ez_template_print() and
+// ez::as::initialize()/autons_add() are gone — both drew to the legacy LCD
+// emulator (LLEMU) or EZ-Template's own selector, which ui:: now owns.
 // ----------------------------------------------------------------------------
 void initialize() {
-  splash_screen();
-
-  ez::ez_template_print();
-  pros::delay(500);
-
   chassis.opcontrol_curve_default_set(2.1, 4.3);
   chassis.odom_tracker_back_set(&horizontal_tracker);  // mounted towards the rear
 
   default_constants();
-
-  ez::as::auton_selector.autons_add({
-      {"Button 1\n\nAuton 1", auton_button_1},
-      {"Button 2\n\nAuton 2", auton_button_2},
-      {"SKILLS\n\nFull Skills Routine", auton_skills},
-  });
-
   chassis.initialize();
-  ez::as::initialize();
 
   lift::initialize();
   toggle::initialize();
+
+  ui::init();
 }
 
 void disabled() {}
@@ -93,7 +60,7 @@ void autonomous() {
   chassis.pid_targets_reset();
   chassis.drive_sensor_reset();
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_HOLD);
-  ez::as::auton_selector.selected_auton_call();
+  ui::run_selected();
 }
 
 // ----------------------------------------------------------------------------
@@ -262,6 +229,7 @@ void match_clock_update() {
 // DRIVER CONTROL
 // ----------------------------------------------------------------------------
 void opcontrol() {
+  ui::clear_screen();  // no-op if run_selected() already did this
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_COAST);
   match_clock_reset();
 
