@@ -1,9 +1,8 @@
 #pragma once
 
-// Team-branded splash + auton selector, built on LVGL. See ui.cpp's header
-// comment and logo_image.h for why this calls a handful of LVGL functions
-// by their real (v8.3.4) names via manual declarations instead of this
-// project's own (mismatched, v9-labeled) liblvgl headers.
+// Team-branded splash + auton selector, built directly on LVGL 8.3.4 (the
+// version this project's liblvgl headers actually match — see
+// logo_image.h for the history of why they didn't, for a while).
 namespace ui {
 
 // Shows the logo splash, then builds the selector screen. Call once from
