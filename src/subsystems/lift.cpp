@@ -116,6 +116,12 @@ void update(int stick) {
     return;
   }
 
+  // Neither button held — this used to leave placing_contact stuck at
+  // whatever it last was (it was only ever touched above, which only runs
+  // while actively lowering/raising), so the screen could keep showing
+  // TOUCHED long after you'd let go.
+  placing_contact = false;
+
   if (homing) {
     double out = height_pid.compute(position());
     left_motor.move(out - correction);
