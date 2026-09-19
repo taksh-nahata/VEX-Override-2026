@@ -36,4 +36,9 @@ bool touched_down();
 void toggle_floor_limit();
 bool floor_limit_on();
 
+// Toggles the ceiling limit on/off. Starts OFF — enable it once you've
+// raised the lift to just short of where it skips (see main.cpp).
+void toggle_ceiling_limit();
+bool ceiling_limit_on();
+
 }  // namespace lift

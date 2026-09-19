@@ -4,9 +4,8 @@
 // PORT / DIRECTION PLACEHOLDERS
 //
 // Ports below marked "confirmed" are real (given 2026-09-12, oriented with
-// the back facing you and the claw facing away). DIR_* directions below are
-// now bench-tested (2026-09-12) except DIR_ODOM_HORIZONTAL, which still
-// needs a push-the-robot check. Flip a DIR_* between 1/-1 to reverse a
+// the back facing you and the claw facing away). All DIR_* directions are
+// now bench-tested (2026-09-18). Flip a DIR_* between 1/-1 to reverse a
 // motor instead of hunting through subsystem code.
 // ============================================================================
 
@@ -31,7 +30,7 @@ constexpr int PORT_IMU = 10;  // confirmed port
 // the claw. DIR_ODOM_HORIZONTAL only flips which way the sensor counts up —
 // figure that out empirically once it's mounted (push the robot right, the
 // reading should increase; flip the sign if it doesn't).
-constexpr int DIR_ODOM_HORIZONTAL = 1;
+constexpr int DIR_ODOM_HORIZONTAL = -1;  // confirmed by push test 2026-09-18
 constexpr int PORT_ODOM_HORIZONTAL = 13 * DIR_ODOM_HORIZONTAL;  // confirmed port
 constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches, pretty sure — double check against the actual wheel
 // Front-back distance from the tracking wheel to the robot's true turning

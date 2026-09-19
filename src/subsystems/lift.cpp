@@ -50,6 +50,12 @@ bool placing_contact = false;
 bool floor_limit_enabled = true;
 double floor_reference = 0;  // updated to "here" each time the limit is re-enabled
 
+// Starts OFF — unlike the floor, we don't have a known-good reference for
+// the top yet. Raise the lift by hand to just short of where it skips,
+// then enable this (see main.cpp) to mark that spot as the ceiling.
+bool ceiling_limit_enabled = false;
+double ceiling_reference = 0;
+
 void initialize() {
   left_motor.tare_position();
   right_motor.tare_position();
@@ -66,6 +72,12 @@ double position() {
 // average of both sides hasn't hit 0 yet.
 double lowest_position() {
   return std::min(left_motor.get_position(), right_motor.get_position());
+}
+
+// Mirror of lowest_position() for the ceiling clamp — stop as soon as
+// EITHER side reaches the top, not just the average.
+double highest_position() {
+  return std::max(left_motor.get_position(), right_motor.get_position());
 }
 
 std::int32_t left_current_ma() {
@@ -97,6 +109,22 @@ void toggle_floor_limit() {
 
 bool floor_limit_on() {
   return floor_limit_enabled;
+}
+
+// Same idea as toggle_floor_limit(), for the top. Motors "skipping" past
+// the mechanism's real max isn't just annoying — it's the gear cartridge
+// internally slipping under excess torque, which wears it and can throw
+// off encoder calibration on top of whatever else is already wrong. Raise
+// the lift to just short of where it skips, then enable this to mark that
+// as the ceiling; re-enabling after moving updates the reference the same
+// way the floor limit does.
+void toggle_ceiling_limit() {
+  ceiling_limit_enabled = !ceiling_limit_enabled;
+  if (ceiling_limit_enabled) ceiling_reference = highest_position();
+}
+
+bool ceiling_limit_on() {
+  return ceiling_limit_enabled;
 }
 
 // Keeps both sides level regardless of who's driving the lift (manual or
@@ -152,6 +180,14 @@ void update(int stick) {
       }
     } else {
       placing_contact = false;
+
+      // Never drive above ceiling_reference (wherever the limit was last
+      // enabled at) — a true stop, same reasoning as the floor limit.
+      if (ceiling_limit_enabled && highest_position() >= ceiling_reference) {
+        left_motor.move(0);
+        right_motor.move(0);
+        return;
+      }
     }
 
     left_motor.move(stick - correction);
