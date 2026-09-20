@@ -61,10 +61,25 @@ constexpr double MAX_CORRECTION = 30;
 constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
 
 // TODO(tune): current (mA) while RAISING that means the lift has hit its
-// own mechanical ceiling and the gear cartridge is skipping. Same caveat as
-// CONTACT_CURRENT_MA — likely needs a different number than that constant,
-// not assumed identical, once both are actually measured.
-constexpr std::int32_t CEILING_CURRENT_MA = 1500;
+// own mechanical ceiling and the gear cartridge is skipping.
+//
+// Bumped 2026-09-20 from the old 1500 (copy-pasted from CONTACT_CURRENT_MA,
+// never actually measured for this direction) — raising fights gravity while
+// lowering has gravity helping, so normal *fine* raising current sits well
+// above what's normal for lowering, and 1500 was getting crossed constantly
+// during ordinary raising, not just at a real ceiling. That's what was
+// actually causing the "glitches / one side at a time / slower" going up:
+// at_ceiling kept false-triggering and stopping/restarting, and the
+// one-tooth-off gear (still not physically fixed) made the two sides cross
+// that false threshold at slightly different times, reading as one side
+// stalling while the other kept moving.
+//
+// 2200 is still just a safer guess, not a measured value — read
+// left_current_ma()/right_current_ma() off debug screen line 1 while
+// raising normally (no glitching) and note the highest steady number you
+// see, then again right as it actually skips/grinds at the true top, and
+// send both so this can be set to something real in between.
+constexpr std::int32_t CEILING_CURRENT_MA = 2200;
 
 // TODO(tune): how many consecutive ticks (~20ms each) current has to stay
 // above threshold before either contact check actually fires. Motors draw
