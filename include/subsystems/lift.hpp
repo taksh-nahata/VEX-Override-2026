@@ -19,6 +19,11 @@ void initialize();
 // Current average height (motor degrees).
 double position();
 
+// Per-side height (motor degrees) — for logging/diagnosing the left/right
+// skew directly instead of only the averaged/combined numbers above.
+double left_position();
+double right_position();
+
 // Drives the lift directly from R1 (+127) / R2 (-127) / neither (0),
 // correcting for left/right skew. Call every opcontrol loop, even when
 // neither button is held.

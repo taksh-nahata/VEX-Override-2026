@@ -47,6 +47,7 @@ void initialize() {
 
   lift::initialize();
   toggle::initialize();
+  sdlog::start();  // /usd/log.csv on the SD card, see sdlog.hpp
 
   ui::init();
 }

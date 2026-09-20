@@ -118,6 +118,14 @@ double position() {
   return (left_motor.get_position() + right_motor.get_position()) / 2.0;
 }
 
+double left_position() {
+  return left_motor.get_position();
+}
+
+double right_position() {
+  return right_motor.get_position();
+}
+
 // Whichever side is physically lower right now — used for the floor clamp
 // so one side can't keep sinking below its own start just because the
 // average of both sides hasn't hit 0 yet.
