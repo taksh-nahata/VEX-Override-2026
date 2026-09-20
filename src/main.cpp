@@ -288,6 +288,16 @@ void opcontrol() {
       master.print(0, 0, "target: %s", toggle::color_name(toggle::target_color()));
     }
 
+    // Drivetrain/odometry calibration test moves (see autons.cpp) — A runs
+    // calibrate_straight() (report the tape-measured distance back), LEFT
+    // runs calibrate_spin() (fully automatic, no measurement needed).
+    // LEFT skipped while the tuner owns it (see above); A is untouched by
+    // the tuner.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) calibrate_straight();
+    if (!chassis.pid_tuner_enabled() && master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
+      calibrate_spin();
+    }
+
     // Lift: R1 = up, R2 = down. Nothing else.
     if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
       lift::update(127);
