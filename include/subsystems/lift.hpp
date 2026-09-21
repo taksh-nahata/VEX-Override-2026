@@ -2,7 +2,8 @@
 
 #include <cstdint>
 
-// DR4B lift: 1 motor per side, held level with a synced dual-motor PID.
+// DR4B lift: 1 motor, mounted on the second four-bar (rebuilt 2026-09-20
+// from a 2-motor dual-side design — see globals.hpp's PORT_LIFT comment).
 //
 // Override only lets a robot carry 1 pin + 1 cup at a time (no accumulator
 // stacking), so the height needed each cycle depends on however tall the
@@ -16,28 +17,21 @@ namespace lift {
 
 void initialize();
 
-// Current average height (motor degrees).
+// Current height (motor degrees).
 double position();
 
-// Per-side height (motor degrees) — for logging/diagnosing the left/right
-// skew directly instead of only the averaged/combined numbers above.
-double left_position();
-double right_position();
-
-// Drives the lift directly from R1 (+127) / R2 (-127) / neither (0),
-// correcting for left/right skew. Call every opcontrol loop, even when
-// neither button is held.
+// Drives the lift directly from R1 (+127) / R2 (-127) / neither (0). Call
+// every opcontrol loop, even when neither button is held.
 void update(int stick);
 
 // Cancels manual control and PIDs back to the floor/intake height. Not
 // currently wired to any button.
 void go_to_floor();
 
-// For tuning CONTACT_CURRENT_MA/CEILING_CURRENT_MA (lift.cpp) — print
-// these while manually lowering onto a real stack, or raising to the
-// mechanical top, to see normal load vs. the spike on contact.
-std::int32_t left_current_ma();
-std::int32_t right_current_ma();
+// For tuning CONTACT_CURRENT_MA/CEILING_CURRENT_MA (lift.cpp) — print this
+// while manually lowering onto a real stack, or raising to the mechanical
+// top, to see normal load vs. the spike on contact.
+std::int32_t current_ma();
 
 // True right after update() stops a downward move due to a current spike
 // (a pin landing on something). Independent of the floor limit below —

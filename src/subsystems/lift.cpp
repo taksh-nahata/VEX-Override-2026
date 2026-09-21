@@ -5,7 +5,6 @@
 #include "EZ-Template/PID.hpp"
 #include "globals.hpp"
 #include "subsystems/lift.hpp"
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 
@@ -13,9 +12,19 @@ namespace lift {
 
 // ============================================================================
 // HARDWARE
+// Rebuilt 2026-09-20 for the single-motor DR4B (was 2 motors with a
+// dual-side synced PID) — see globals.hpp's PORT_LIFT comment for why.
+//
+// position() reads the rotation sensor, not the motor's own encoder — it's
+// mounted on the far side of the 12T:72T external reduction (on the
+// four-bar's actual shaft), so it reports true arm angle directly instead
+// of motor-shaft rotation that assumes a perfect, backlash-free gear mesh.
+// The motor is still what's driven (move()) and still what current_ma()
+// reads — the rotation sensor has no current draw, it's a pure angle
+// sensor.
 // ============================================================================
-pros::Motor left_motor(PORT_LIFT_L, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
-pros::Motor right_motor(PORT_LIFT_R, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
+pros::Motor motor(PORT_LIFT, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
+pros::Rotation rotation(PORT_LIFT_ROTATION);
 
 // ============================================================================
 // TUNABLE CONSTANTS
@@ -23,12 +32,10 @@ pros::Motor right_motor(PORT_LIFT_R, pros::v5::MotorGears::green, pros::v5::Moto
 // "TODO(tune)" for the full list of what still needs a real-world number.
 // ============================================================================
 
-// TODO(tune): retune once the DR4B is built, weighed, and the one-tooth
-// gear issue is physically fixed (see git history 2026-09-18) — tuning
-// against a mechanically crooked lift will just bake that crookedness into
-// the gains.
+// TODO(tune): retune for the new single-motor/1:6 external reduction — the
+// old gains were never trustworthy anyway (tuned against a mechanically
+// crooked 2-motor lift, see git history 2026-09-18/20).
 ez::PID height_pid(0.4, 0.0, 1.0, 0);
-ez::PID sync_pid(0.2, 0.0, 0.0, 0);
 
 // TODO(tune): smallest constant that stops the lift sagging under gravity
 // while height_pid is holding — too much fights the driver lowering it and
@@ -44,52 +51,38 @@ ez::PID sync_pid(0.2, 0.0, 0.0, 0);
 constexpr int GRAVITY_HOLD = 15;
 
 constexpr int STICK_DEADBAND = 10;
+// TODO(tune): position() reads a rotation sensor past the new 1:6 external
+// reduction as of 2026-09-20, not a motor's own encoder — a "degree" here
+// covers ~6x the arm movement a raw motor degree used to, so this
+// unchanged-since-the-2-motor-days number is probably too loose now.
 constexpr double FLOOR_TOLERANCE_DEG = 10.0;
 
-// TODO(tune): smallest value that still keeps both sides level. Deliberately
-// capped — see sync_correction() below for why an uncapped value is a bug,
-// not just imprecise.
-constexpr double MAX_CORRECTION = 30;
-
 // TODO(tune): current (mA) while LOWERING that means a pin has landed on
-// something solid. TODO(verify): watch left_current_ma()/right_current_ma()
-// on the debug screen while manually lowering onto a real stack to find
-// normal descending load vs. the spike on actual contact — this number is
-// a total guess right now, and will read falsely high until the one-tooth
-// gear issue is fixed and the top stage is fully rubber-banded (both add
-// current draw that has nothing to do with contact).
+// something solid. TODO(verify): watch current_ma() on the debug screen
+// while manually lowering onto a real stack to find normal descending load
+// vs. the spike on actual contact — this number is a total guess right now.
 constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
 
 // TODO(tune): current (mA) while RAISING that means the lift has hit its
-// own mechanical ceiling and the gear cartridge is skipping.
-//
-// Bumped 2026-09-20 from the old 1500 (copy-pasted from CONTACT_CURRENT_MA,
-// never actually measured for this direction) — raising fights gravity while
-// lowering has gravity helping, so normal *fine* raising current sits well
-// above what's normal for lowering, and 1500 was getting crossed constantly
-// during ordinary raising, not just at a real ceiling. That's what was
-// actually causing the "glitches / one side at a time / slower" going up:
-// at_ceiling kept false-triggering and stopping/restarting, and the
-// one-tooth-off gear (still not physically fixed) made the two sides cross
-// that false threshold at slightly different times, reading as one side
-// stalling while the other kept moving.
-//
-// 2200 is still just a safer guess, not a measured value — read
-// left_current_ma()/right_current_ma() off debug screen line 1 while
-// raising normally (no glitching) and note the highest steady number you
-// see, then again right as it actually skips/grinds at the true top, and
-// send both so this can be set to something real in between.
+// own mechanical ceiling. Still an unmeasured guess — read current_ma() off
+// debug screen line 1 while raising normally (steady-state, no glitching)
+// and note the highest number you see, then again right at the true top,
+// and send both so this can be set to something real in between. Kept
+// higher than CONTACT_CURRENT_MA on purpose: raising fights gravity,
+// lowering has gravity helping, so normal *fine* raising current sits
+// above normal lowering current — see git history 2026-09-20 for how using
+// the same number for both caused false-triggering on the old 2-motor lift.
 constexpr std::int32_t CEILING_CURRENT_MA = 2200;
 
 // TODO(tune): how many consecutive ticks (~20ms each) current has to stay
 // above threshold before either contact check actually fires. Motors draw
 // a brief inrush current spike just from starting to move under load —
 // without this, a single-tick reading right as R1/R2 is first pressed
-// could exceed the threshold, stop the motors, current drops since
-// they're stopped, then the very next tick it tries again and spikes
-// again — a rapid stop-start stutter ("glitching") instead of a clean
-// contact stop. Requiring a few consecutive high readings filters that
-// out while still catching a genuine sustained stall.
+// could exceed the threshold, stop the motor, current drops since it's
+// stopped, then the very next tick it tries again and spikes again — a
+// rapid stop-start stutter ("glitching") instead of a clean contact stop.
+// Requiring a few consecutive high readings filters that out while still
+// catching a genuine sustained stall.
 constexpr int CONTACT_DEBOUNCE_TICKS = 5;
 
 // ============================================================================
@@ -108,37 +101,18 @@ double floor_reference = 0;  // updated to "here" each time the floor limit is r
 // ============================================================================
 
 void initialize() {
-  left_motor.tare_position();
-  right_motor.tare_position();
-  left_motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  right_motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  rotation.reset_position();
 }
 
+// Degrees, from the rotation sensor (see HARDWARE comment above for why
+// not the motor's own encoder). Rotation reports centidegrees.
 double position() {
-  return (left_motor.get_position() + right_motor.get_position()) / 2.0;
+  return rotation.get_position() / 100.0;
 }
 
-double left_position() {
-  return left_motor.get_position();
-}
-
-double right_position() {
-  return right_motor.get_position();
-}
-
-// Whichever side is physically lower right now — used for the floor clamp
-// so one side can't keep sinking below its own start just because the
-// average of both sides hasn't hit 0 yet.
-double lowest_position() {
-  return std::min(left_motor.get_position(), right_motor.get_position());
-}
-
-std::int32_t left_current_ma() {
-  return left_motor.get_current_draw();
-}
-
-std::int32_t right_current_ma() {
-  return right_motor.get_current_draw();
+std::int32_t current_ma() {
+  return motor.get_current_draw();
 }
 
 // True for the tick(s) after update() last stopped a LOWERING move because
@@ -168,43 +142,18 @@ bool at_ceiling_now() {
 // instead of needing one.
 // ============================================================================
 
-// Toggle so it can be switched off while troubleshooting (e.g. the
-// crooked-lift issue) without editing code, and back on afterward. Turning
-// it back ON captures wherever the lift is AT THAT MOMENT as the new floor
-// — not the original boot position — so you can disable it, reposition,
-// and re-enable to set a new floor on the fly. See main.cpp for the button.
+// Toggle so it can be switched off while troubleshooting without editing
+// code, and back on afterward. Turning it back ON captures wherever the
+// lift is AT THAT MOMENT as the new floor — not the original boot position
+// — so you can disable it, reposition, and re-enable to set a new floor on
+// the fly. See main.cpp for the button.
 void toggle_floor_limit() {
   floor_limit_enabled = !floor_limit_enabled;
-  if (floor_limit_enabled) floor_reference = lowest_position();
+  if (floor_limit_enabled) floor_reference = position();
 }
 
 bool floor_limit_on() {
   return floor_limit_enabled;
-}
-
-// ============================================================================
-// SYNC CORRECTION
-// ============================================================================
-
-// Keeps both sides level regardless of who's driving the lift (manual or
-// PID). Capped so it can only ever nudge, never override — an uncapped
-// correction grows with however out-of-sync the sides currently are, and
-// once it's bigger than the commanded stick value it flips that side's
-// sign entirely: e.g. holding R1 (both sides should rise) but a large
-// correction pushes stick - correction negative, so the left side drops
-// instead. That was the "R1/R2 sometimes goes the wrong way" bug (fixed
-// 2026-09-18) — it got worse the more the two sides had drifted apart
-// since boot, which is why it was intermittent rather than every time.
-//
-// TODO(mechanical, tracked externally not here): one lift motor's gear is
-// seated one tooth off, which is a fixed mechanical disagreement this PID
-// can never actually resolve — it will keep straining against an
-// unreachable target until that gear is physically reseated. Expect
-// elevated current and possibly false TOUCHED/CEILING readings until then.
-double sync_correction() {
-  double skew = left_motor.get_position() - right_motor.get_position();
-  double correction = sync_pid.compute_error(-skew, skew);
-  return std::clamp(correction, -MAX_CORRECTION, MAX_CORRECTION);
 }
 
 // ============================================================================
@@ -222,8 +171,6 @@ void go_to_floor() {
 // Drives the lift directly from R1 (+127) / R2 (-127) / neither (0).
 // Call every opcontrol loop, even when neither is held.
 void update(int stick) {
-  double correction = sync_correction();
-
   if (std::abs(stick) > STICK_DEADBAND) {
     homing = false;
 
@@ -232,13 +179,11 @@ void update(int stick) {
       ceiling_high_ticks = 0;
 
       // Floor: never drive below floor_reference — a true stop, not just
-      // zeroing the driver's input; correction doesn't get to sneak the
-      // motors past this either.
-      if (floor_limit_enabled && lowest_position() <= floor_reference) {
+      // zeroing the driver's input.
+      if (floor_limit_enabled && position() <= floor_reference) {
         placing_contact = false;
         contact_high_ticks = 0;
-        left_motor.move(0);
-        right_motor.move(0);
+        motor.move(0);
         return;
       }
 
@@ -248,12 +193,11 @@ void update(int stick) {
       // open the claw — release stays a deliberate, separate button press,
       // since it's the one irreversible step here (can't un-drop a pin)
       // and this detection is still unverified.
-      bool current_high = left_current_ma() > CONTACT_CURRENT_MA || right_current_ma() > CONTACT_CURRENT_MA;
+      bool current_high = current_ma() > CONTACT_CURRENT_MA;
       contact_high_ticks = current_high ? contact_high_ticks + 1 : 0;
       placing_contact = contact_high_ticks >= CONTACT_DEBOUNCE_TICKS;
       if (placing_contact) {
-        left_motor.move(0);
-        right_motor.move(0);
+        motor.move(0);
         return;
       }
     } else {
@@ -265,18 +209,16 @@ void update(int stick) {
       // at_ceiling_now() above for why this doesn't need a manual
       // calibration step the way the floor did, and CONTACT_DEBOUNCE_TICKS
       // for why it's not a single-tick check.
-      bool current_high = left_current_ma() > CEILING_CURRENT_MA || right_current_ma() > CEILING_CURRENT_MA;
+      bool current_high = current_ma() > CEILING_CURRENT_MA;
       ceiling_high_ticks = current_high ? ceiling_high_ticks + 1 : 0;
       at_ceiling = ceiling_high_ticks >= CONTACT_DEBOUNCE_TICKS;
       if (at_ceiling) {
-        left_motor.move(0);
-        right_motor.move(0);
+        motor.move(0);
         return;
       }
     }
 
-    left_motor.move(stick - correction);
-    right_motor.move(stick + correction);
+    motor.move(stick);
     return;
   }
 
@@ -291,8 +233,7 @@ void update(int stick) {
 
   if (homing) {
     double out = height_pid.compute(position()) + GRAVITY_HOLD;
-    left_motor.move(out - correction);
-    right_motor.move(out + correction);
+    motor.move(out);
     if (std::fabs(position()) < FLOOR_TOLERANCE_DEG) homing = false;
     return;
   }
@@ -302,8 +243,7 @@ void update(int stick) {
   // doesn't just coast. Don't add GRAVITY_HOLD or any other constant on
   // top of this; that would override the firmware's own feedback with a
   // cruder open-loop guess instead of complementing it.
-  left_motor.move(0);
-  right_motor.move(0);
+  motor.move(0);
 }
 
 }  // namespace lift

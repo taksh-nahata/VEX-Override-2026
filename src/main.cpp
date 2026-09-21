@@ -89,8 +89,14 @@ void autonomous() {
 // TIP_ANGLE_DEG, override down to 0 regardless of height. By the time this
 // fires, the robot may already be past the point where it helps.
 //
-// TODO(tune): MAX_LIFT_HEIGHT_DEG — measure the real full-height encoder
-// value once the ceiling is known (see lift.cpp's at_ceiling_now()).
+// TODO(tune): MAX_LIFT_HEIGHT_DEG — measure the real full-height value once
+// the ceiling is known (see lift.cpp's at_ceiling_now()). 2000 was never
+// measured even for the old 2-motor lift, and lift::position() changed
+// what a "degree" even means as of 2026-09-20 — it now reads a rotation
+// sensor mounted past the new 1:6 external reduction, not a motor's own
+// encoder, so a degree there covers ~6x the arm movement a raw motor
+// degree used to. Whatever number this becomes, re-derive it against the
+// new sensor, don't carry over anything from before that date.
 // TODO(tune): MIN_SPEED_AT_FULL_HEIGHT — how slow is actually safe at max
 // height.
 // TODO(verify): TIP_ANGLE_DEG — find by tipping the robot (safely, low lift
@@ -162,8 +168,7 @@ void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 0, "odom (in): %.2f", horizontal_tracker.get());
 
   const char* lift_status = lift::touched_down() ? "TOUCHED" : (lift::at_ceiling_now() ? "CEILING" : "");
-  pros::screen::print(TEXT_MEDIUM, 1, "lift mA L/R: %d / %d %s", lift::left_current_ma(), lift::right_current_ma(),
-                       lift_status);
+  pros::screen::print(TEXT_MEDIUM, 1, "lift mA: %d  pos: %.1f  %s", lift::current_ma(), lift::position(), lift_status);
 
   pros::screen::print(TEXT_MEDIUM, 2, "floor limit: %s (DOWN to toggle)", lift::floor_limit_on() ? "ON" : "OFF");
   pros::screen::print(TEXT_MEDIUM, 3, "pitch/roll: %.1f / %.1f", chassis.imu.get_pitch(), chassis.imu.get_roll());

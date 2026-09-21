@@ -17,7 +17,7 @@ constexpr int DIR_DRIVE_RB = 1;
 constexpr int PORT_DRIVE_LF = 19 * DIR_DRIVE_LF;
 constexpr int PORT_DRIVE_LB = 11 * DIR_DRIVE_LB;
 constexpr int PORT_DRIVE_RF = 16 * DIR_DRIVE_RF;
-constexpr int PORT_DRIVE_RB = 20 * DIR_DRIVE_RB;
+constexpr int PORT_DRIVE_RB = 15 * DIR_DRIVE_RB;  // moved from 20 to 15 2026-09-20 to make room for the lift motor
 
 constexpr int PORT_IMU = 10;  // confirmed port
 
@@ -42,22 +42,31 @@ constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — confirmed 
 // TODO(verify): measure with a tape measure — never done, still 0.0.
 constexpr double ODOM_HORIZONTAL_OFFSET = 0.0;
 
-// --- DR4B lift (2 motors, dual-side synced PID) --- confirmed ports
-// Previous signs (L=1, R=-1) made the WHOLE lift go down on a positive
-// command instead of up — confirmed by testing R1, not by re-derived
-// guesswork this time. Both flipped together to invert overall polarity
-// while keeping left/right mirrored relative to each other.
+// --- DR4B lift (1 motor, mounted on the second four-bar) --- confirmed port
+// Rebuilt 2026-09-20 from the old 2-motor dual-side design — that design's
+// left/right gear mismatch (one tooth off, found 2026-09-18) kept causing
+// current spikes/skipping no matter how sync correction was tuned, since
+// it was a fixed mechanical disagreement no encoder-based correction could
+// reach. Moving to a single motor removes the mismatch entirely instead of
+// working around it: confirmed on the bench, no more skipping.
 //
-// TODO(mechanical): the left side's gear is seated one tooth off from the
-// right (found 2026-09-18) — a fixed mechanical offset no amount of
-// encoder-based sync correction (lift.cpp) can fix, since it measures
-// motor rotation, not actual arm position. Needs the gear physically
-// reseated, not a code change; expect crookedness and false
-// TOUCHED/CEILING readings (lift.cpp) until then.
-constexpr int DIR_LIFT_L = 1;
-constexpr int DIR_LIFT_R = -1;
-constexpr int PORT_LIFT_L = 8 * DIR_LIFT_L;
-constexpr int PORT_LIFT_R = 15 * DIR_LIFT_R;
+// 12T on the motor, 72T on the second four-bar's shaft — 1:6 external
+// reduction. A rotation sensor is mounted on the 72T shaft (confirmed port
+// 2026-09-20) for direct arm-angle feedback past that gear mesh instead of
+// trusting the motor's own encoder through it — see lift.cpp for why, and
+// for how it's actually used (position, not current/driving — that's
+// still the motor).
+//
+// TODO(verify): both DIR_LIFT and DIR_LIFT_ROTATION are guesses (DIR_LIFT
+// matches the old DIR_LIFT_L) — confirm each with R1 like every other
+// actuator's direction this project, don't trust either blind just because
+// it's a default. They're independent: the rotation sensor could easily
+// read backwards from the motor even if the motor's sign is already right.
+constexpr int DIR_LIFT = 1;
+constexpr int PORT_LIFT = 20 * DIR_LIFT;
+
+constexpr int DIR_LIFT_ROTATION = 1;
+constexpr int PORT_LIFT_ROTATION = 12 * DIR_LIFT_ROTATION;
 
 // --- Claw (1 solenoid) --- confirmed port
 constexpr char PORT_CLAW_SOLENOID = 'A';
