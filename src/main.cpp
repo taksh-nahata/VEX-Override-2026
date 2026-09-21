@@ -18,9 +18,8 @@ ez::Drive chassis(
     PORT_IMU,
     2.75,        // Wheel Diameter, inches — confirmed 2026-09-20 (was "pretty sure" 2026-09-13)
     600,         // Cartridge RPM (blue/6:1) — TODO(verify): still just "pretty sure," not confirmed
-    48.0 / 36.0  // External gear ratio (wheel gear / motor gear): TODO(verify) —
-                 // assuming 36T on the motor side and 48T on the wheel side;
-                 // flip to 36.0/48.0 if that's backwards from how it's built
+    48.0 / 36.0  // External gear ratio (wheel gear / motor gear) — confirmed 2026-09-20:
+                 // 36T on the motor side, 48T on the wheel side
 );
 
 ez::tracking_wheel horizontal_tracker(PORT_ODOM_HORIZONTAL, ODOM_HORIZONTAL_WHEEL_DIAMETER, ODOM_HORIZONTAL_OFFSET);
