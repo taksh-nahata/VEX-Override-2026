@@ -50,19 +50,22 @@ void tune_test() {
 // ============================================================================
 // DRIVETRAIN CALIBRATION
 // Two test moves for measuring the real numbers behind main.cpp's chassis
-// constructor (wheel diameter, external gear ratio) and globals.hpp's
-// ODOM_HORIZONTAL_WHEEL_DIAMETER/OFFSET — all four are still unmeasured
-// guesses (TODO(verify)). Bound to controller buttons in main.cpp; results
-// print to the brain (line 5) and controller, and every tick of both moves
-// also lands in /usd/log.csv (sdlog.cpp).
+// constructor and globals.hpp's ODOM_HORIZONTAL_WHEEL_DIAMETER/OFFSET.
+// Bound to controller buttons in main.cpp; results print to the brain
+// (line 5) and controller, and every tick of both moves also lands in
+// /usd/log.csv (sdlog.cpp).
 //
-// calibrate_straight() needs exactly ONE number back from a human: the real
-// distance driven, read with a tape measure. Nothing on this robot knows
-// true linear distance on its own — every distance number it can report
-// (drive encoders, tracking wheel) is only as good as the wheel diameter
-// it's assuming, which is the thing being measured here. No way around
-// that without an external reference this robot doesn't have (e.g. a
-// distance sensor aimed at a fixed wall).
+// Both wheel diameters (drive + tracker) are confirmed as of 2026-09-20 —
+// only the drive's EXTERNAL GEAR RATIO (main.cpp, still assumed 48/36) and
+// ODOM_HORIZONTAL_OFFSET (globals.hpp, never measured) are still unknowns.
+//
+// calibrate_straight() still needs exactly ONE number back from a human:
+// the real distance driven, read with a tape measure. Since wheel diameter
+// is no longer in question, drive_in below being off from that measurement
+// now isolates the gear ratio specifically, instead of an undifferentiated
+// diameter*ratio scale factor — new_gear_ratio = old_gear_ratio *
+// (drive_in / measured). Faster still: just count the teeth on the two
+// meshed drive gears, ten seconds, no test move needed at all.
 //
 // calibrate_spin(), by contrast, needs NO human measurement. A pure
 // in-place spin has zero real sideways travel, so whatever lateral inches
@@ -70,11 +73,6 @@ void tune_test() {
 // ODOM_HORIZONTAL_OFFSET being wrong — fully self-checkable using the IMU's
 // own rotation count (an independent, trusted sensor) as ground truth for
 // how far it actually turned.
-//
-// TODO(verify): also just count the actual teeth on the two meshed drive
-// gears — ten seconds, and it settles the gear-ratio half of the drive
-// unknown for free, leaving only wheel diameter to solve for from
-// calibrate_straight()'s measurement.
 // ============================================================================
 
 // Raw encoder degrees, not inches — inches would bake in the very wheel
@@ -100,10 +98,13 @@ void calibrate_straight() {
   master.print(0, 0, "drv%.1f trk%.1f in", drive_in, tracker_in);
   pros::screen::print(TEXT_MEDIUM, 5, "CALIB straight: drive=%.2fin tracker=%.2fin -- tape-measure real distance",
                        drive_in, tracker_in);
-  // Report the real measured distance (call it M) back, and both constants
-  // correct by simple proportion — no need to re-derive the formulas:
-  //   new wheel diameter   = old wheel diameter   * (M / drive_in)
-  //   new tracker diameter = old tracker diameter * (M / tracker_in)
+  // Report the real measured distance (call it M) back. Wheel diameters
+  // are already confirmed, so any gap between drive_in and M now isolates
+  // the drive's external gear ratio specifically:
+  //   new gear ratio = old gear ratio * (M / drive_in)
+  // (tracker_in should already be close to M with tracker diameter
+  // confirmed — a big gap there would point at ODOM_HORIZONTAL_OFFSET or
+  // slop in that wheel's mount instead.)
 }
 
 // More rotations = more averaging = less noise in the offset estimate, at

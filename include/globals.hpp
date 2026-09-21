@@ -32,7 +32,7 @@ constexpr int PORT_IMU = 10;  // confirmed port
 // reading should increase; flip the sign if it doesn't).
 constexpr int DIR_ODOM_HORIZONTAL = -1;  // confirmed by push test 2026-09-18
 constexpr int PORT_ODOM_HORIZONTAL = 13 * DIR_ODOM_HORIZONTAL;  // confirmed port
-constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — TODO(verify): "pretty sure," never measured directly
+constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — confirmed 2026-09-20
 // Front-back distance from the tracking wheel to the robot's true turning
 // center. Since it's a back tracker this is a positive number — how far
 // back of center it sits. NOT the left-right offset: EZ-Template's
