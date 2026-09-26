@@ -63,10 +63,10 @@ constexpr double ODOM_HORIZONTAL_OFFSET = 0.0;
 // it's a default. They're independent: the rotation sensor could easily
 // read backwards from the motor even if the motor's sign is already right.
 constexpr int DIR_LIFT = 1;
-constexpr int PORT_LIFT = 20 * DIR_LIFT;
+constexpr int PORT_LIFT = 1 * DIR_LIFT;  // moved from 20 to 1, 2026-09-25
 
 constexpr int DIR_LIFT_ROTATION = 1;
-constexpr int PORT_LIFT_ROTATION = 12 * DIR_LIFT_ROTATION;
+constexpr int PORT_LIFT_ROTATION = 8 * DIR_LIFT_ROTATION;  // moved from 12 to 8, 2026-09-25
 
 // --- Claw (1 solenoid) --- confirmed port
 constexpr char PORT_CLAW_SOLENOID = 'A';
