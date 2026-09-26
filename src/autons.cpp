@@ -305,18 +305,43 @@ void auton_jerryio_test() {
   // before this runs (see main.cpp's LEFT binding).
   chassis.odom_xyt_set(7.5, 32, 270);
 
+  // CORRECTED 2026-09-27, second bug found the same day -- the first
+  // fixed-heading version spun in circles and moved erratically. Cause:
+  // EZ-Template's pid_odom_pp_set() silently switches an individual point
+  // to BOOMERANG mode (a completely different algorithm, aimed at also
+  // arriving at an exact heading, not just passing through) whenever that
+  // point has a heading set at all -- confirmed in EZ-Template's own docs
+  // ("the path will switch to boomerang if angle is specified for that
+  // point"). We were carrying over PATH.JERRYIO's own bezier-segment-
+  // boundary headings onto several MIDDLE points in the path, which each
+  // silently kicked off a boomerang maneuver mid-route instead of a smooth
+  // pass-through -- that's almost certainly the spinning. Those headings
+  // meant something to PATH.JERRYIO's own curve math; they don't mean the
+  // same thing to a different path-following algorithm, so we stopped
+  // carrying them over. Every point below is now plain {x, y}, no
+  // heading, all the way through -- if a specific final facing matters
+  // for actually placing the cup, that's a separate pid_turn_set() after,
+  // the same pattern already used for the 180 below, not something baked
+  // into the pure pursuit call.
+  //
+  // Speeds also came down across the board (120 -> 60-80) -- 120 turned
+  // out to be close to this robot's actual max, and the drivetrain hasn't
+  // been tuned for pure pursuit at all yet. Get it tracking the path
+  // shape correctly and slowly first; speed it back up once that's
+  // actually confirmed, not before.
+
   // Leg 1: start to the cup+pin.
   chassis.pid_odom_pp_set(
       std::vector<odom>{
-          {{7.5, 32, 270.0}, ez::fwd, 120},
-          {{9.942, 35.021}, ez::fwd, 120},
-          {{10.707, 34.843}, ez::fwd, 120},
-          {{11.421, 34.513}, ez::fwd, 120},
-          {{12.067, 34.065}, ez::fwd, 120},
-          {{12.665, 33.552}, ez::fwd, 100},
-          {{13.247, 33.022}, ez::fwd, 80},
-          {{13.839, 32.502}, ez::fwd, 50},
-          {{14.455, 32.013}, ez::fwd, 30},  // pickup point -- 6.295in from start
+          {{7.5, 32}, ez::fwd, 70},
+          {{9.942, 35.021}, ez::fwd, 70},
+          {{10.707, 34.843}, ez::fwd, 70},
+          {{11.421, 34.513}, ez::fwd, 70},
+          {{12.067, 34.065}, ez::fwd, 60},
+          {{12.665, 33.552}, ez::fwd, 50},
+          {{13.247, 33.022}, ez::fwd, 40},
+          {{13.839, 32.502}, ez::fwd, 30},
+          {{14.455, 32.013}, ez::fwd, 20},  // pickup point -- 6.295in from start
       },
       true);
   chassis.pid_wait();
@@ -350,34 +375,47 @@ void auton_jerryio_test() {
   // as "keep going forwards" after the 180 -- worth confirming on the
   // bench that driving nose-first is actually correct here and the path
   // wasn't drawn assuming the robot stays reversed through this leg.
+  //
+  // No headings on any point here either, including the old sharp-turn
+  // break-points -- same boomerang problem as leg 1. Kept those two
+  // stretches slow (40-50) since they're still the sharpest direction
+  // changes in the path, just via speed now, not a heading target.
   chassis.pid_odom_pp_set(
       std::vector<odom>{
-          {{14.455, 32.013}, ez::fwd, 30},
-          {{15.101, 31.563}, ez::fwd, 120},
-          {{15.775, 31.156}, ez::fwd, 120},
-          {{16.475, 30.794}, ez::fwd, 120},
-          {{17.194, 30.475}, ez::fwd, 90},
-          {{17.930, 30.195}, ez::fwd, 70},
-          {{18.186, 30.315, 230.0}, ez::fwd, 60},
-          {{17.740, 30.963}, ez::fwd, 70},
-          {{17.294, 31.612}, ez::fwd, 120},
-          {{16.848, 32.261}, ez::fwd, 120},
-          {{16.402, 32.910}, ez::fwd, 120},
-          {{15.933, 33.543, 30.0}, ez::fwd, 120},
-          {{15.490, 34.193}, ez::fwd, 120},
-          {{15.113, 34.884}, ez::fwd, 120},
-          {{14.852, 35.625}, ez::fwd, 120},
-          {{14.794, 36.407}, ez::fwd, 120},
-          {{15.029, 37.153}, ez::fwd, 120},
-          {{15.501, 37.780}, ez::fwd, 120},
-          {{16.090, 38.302}, ez::fwd, 120},
-          {{16.723, 38.769}, ez::fwd, 120},
-          {{17.368, 39.222}, ez::fwd, 90},
-          {{18.002, 39.688}, ez::fwd, 70},
-          {{18.598, 40.186, 320.0}, ez::fwd, 60},
-          {{18.598, 40.186, 320.0}, ez::fwd, 0},
+          {{14.455, 32.013}, ez::fwd, 20},
+          {{15.101, 31.563}, ez::fwd, 70},
+          {{15.775, 31.156}, ez::fwd, 70},
+          {{16.475, 30.794}, ez::fwd, 60},
+          {{17.194, 30.475}, ez::fwd, 50},
+          {{17.930, 30.195}, ez::fwd, 40},
+          {{18.186, 30.315}, ez::fwd, 40},
+          {{17.740, 30.963}, ez::fwd, 50},
+          {{17.294, 31.612}, ez::fwd, 70},
+          {{16.848, 32.261}, ez::fwd, 70},
+          {{16.402, 32.910}, ez::fwd, 70},
+          {{15.933, 33.543}, ez::fwd, 70},
+          {{15.490, 34.193}, ez::fwd, 70},
+          {{15.113, 34.884}, ez::fwd, 70},
+          {{14.852, 35.625}, ez::fwd, 70},
+          {{14.794, 36.407}, ez::fwd, 70},
+          {{15.029, 37.153}, ez::fwd, 70},
+          {{15.501, 37.780}, ez::fwd, 70},
+          {{16.090, 38.302}, ez::fwd, 70},
+          {{16.723, 38.769}, ez::fwd, 60},
+          {{17.368, 39.222}, ez::fwd, 50},
+          {{18.002, 39.688}, ez::fwd, 40},
+          {{18.598, 40.186}, ez::fwd, 30},
+          {{18.598, 40.186}, ez::fwd, 0},
       },
       true);
+  chassis.pid_wait();
+
+  // Final facing for placing onto the goal -- kept as its own explicit
+  // turn instead of a boomerang point in the path above, same reasoning
+  // as everywhere else in this function now. 320 is PATH.JERRYIO's raw
+  // heading at this point, unconverted (see the note above
+  // auton_jerryio_test() for why no conversion is needed).
+  chassis.pid_turn_set(320, 90, true);
   chassis.pid_wait();
 
   claw::open();  // place the cup+pin onto the goal
