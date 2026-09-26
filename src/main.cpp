@@ -35,7 +35,6 @@ void initialize() {
 
   default_constants();
   chassis.initialize();
-  chassis.pid_tuner_print_brain_set(true);  // see opcontrol()'s X/B bindings below
 
   lift::initialize();
   toggle::initialize();
@@ -254,20 +253,7 @@ void opcontrol() {
   match_clock_reset();
 
   while (true) {
-    // Drivetrain PID tuner (EZ-Template's built-in one) -- X turns it on
-    // and off, B runs tune_test() (autons.cpp) so we can see a move happen
-    // live. Once it's on, Up/Down picks which PID we're tuning (Turn is
-    // the one driven by the IMU) and Left/Right nudges the selected value.
-    // We skip debug_screen() and the UP/LEFT bindings further down while
-    // it's on so they don't fight the tuner over the same buttons.
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) chassis.pid_tuner_toggle();
-    chassis.pid_tuner_iterate();
-    if (chassis.pid_tuner_enabled()) {
-      if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) tune_test();
-    } else {
-      debug_screen();
-    }
-
+    debug_screen();
     controller_feedback();
     match_clock_update();
     anti_tip_apply();
@@ -280,22 +266,32 @@ void opcontrol() {
     // Toggle target color -- UP swaps between red and blue, Y jumps
     // straight to yellow. What's picked shows up on the controller screen
     // (controller_feedback() above), so the driver always knows.
-    if (!chassis.pid_tuner_enabled() && master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
       toggle::toggle_target_red_blue();
     }
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)) {
       toggle::set_target_yellow();
     }
 
-    // Drivetrain/odometry calibration moves (autons.cpp) -- A runs
-    // calibrate_straight() (tape-measure the real distance and tell us),
-    // LEFT runs calibrate_spin() (fully automatic, nothing to measure).
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) calibrate_straight();
-    if (!chassis.pid_tuner_enabled() && master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
-      calibrate_spin();
+    // Lift height presets -- one button per pin, so the driver doesn't
+    // have to eyeball a height with R1/R2 every cycle. X/B/A print which
+    // one got pressed so it's obvious even before the lift finishes
+    // moving. R1/R2 immediately take back manual control if pressed
+    // during a preset move (see lift::update()).
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) {
+      lift::go_to_pin_1();
+      master.print(0, 2, "PIN 1");
+    }
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
+      lift::go_to_pin_2();
+      master.print(0, 2, "PIN 2");
+    }
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
+      lift::go_to_pin_3();
+      master.print(0, 2, "PIN 3");
     }
 
-    // Lift: R1 raises, R2 lowers, that's the whole interface.
+    // Lift: R1 raises, R2 lowers, that's the whole manual interface.
     if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
       lift::update(127);
     } else if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {

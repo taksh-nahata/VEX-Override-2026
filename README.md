@@ -27,19 +27,20 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 
 ## Controls
 
-- **R1 / R2** — lift up / down.
+- **R1 / R2** — lift up / down (manual). Pressing either always takes back control from a height preset below.
+- **X / B / A** — send the lift to the Pin 1 / Pin 2 / Pin 3 height preset (the pin going onto an empty goal / a goal with 1 pin / a goal with 2). Prints which one you picked to the controller screen.
 - **L1** — toggle claw open/closed.
 - **L2** (hold) — spin the toggle wheel toward the current target color; stops automatically on reaching it.
 - **UP** — swap the toggle target between red/blue. **Y** — set it to yellow. Shown on the controller screen.
-- **X** — toggle the drivetrain PID tuner on/off. While it's on: **Up/Down** picks the PID set, **Left/Right** adjusts the selected value, **B** runs a test drive+turn move.
-- **A** — run the drivetrain calibration test move (tape-measure the result and report it back). **LEFT** — run the odometry offset calibration spin (fully automatic). Both disabled while the tuner is on.
+
+The drivetrain PID tuner and the drivetrain/odometry calibration test moves are still in `autons.cpp` (`tune_test()`, `calibrate_straight()`, `calibrate_spin()`) but not currently wired to any button — we freed up X/B/A/LEFT for the lift presets above. Ask if you want them back on the controller for more drivetrain tuning.
 
 ## Hardware status
 
 Ports are confirmed and in `globals.hpp`. Still open:
 - All PID gains (`autons.cpp`, `lift.cpp`) and the toggle color sensor's hue thresholds (`toggle.cpp`) — need tuning against the real robot/toggles.
-- Anti-tip constants in `main.cpp` (tip angle, max lift height, correction direction) — unverified, test carefully before relying on them.
-- `ODOM_HORIZONTAL_OFFSET` (`globals.hpp`) — run the LEFT-button calibration spin and report the result.
+- The three lift height presets (`PIN_1/2/3_HEIGHT_DEG` in `lift.cpp`) are placeholder guesses — press each button and adjust against the real stack heights.
+- Anti-tip constants in `main.cpp` (tip angle/rate, max lift height, correction direction) — unverified, test carefully before relying on them.
 - The lift must be powered on with it all the way down at true floor every time — `position()` zeros to wherever it physically is at boot, not a fixed reference.
 
 See `TODO.md` for the full current status and what's next.

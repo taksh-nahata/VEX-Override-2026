@@ -20,9 +20,19 @@ double position();
 // opcontrol loop, even when neither button is held.
 void update(int stick);
 
-// Cancels manual control and PIDs down to position 0. Not currently wired
-// to a button.
+// Cancels manual control and PIDs down to the floor (position 0). Wired
+// to no button of its own -- it's what go_to_pin_1/2/3() below build on.
 void go_to_floor();
+
+// Presets for the three heights we actually use in a match: the pin
+// that's going on an empty goal, on a goal with 1 pin already on it, and
+// on a goal with 2. Bound to X/B/A in main.cpp -- meant to be something a
+// driver can push without having to think about exact heights themselves.
+// Target heights are guesses in lift.cpp, tagged TODO(tune) -- there's no
+// substitute for testing these against the real stack heights.
+void go_to_pin_1();
+void go_to_pin_2();
+void go_to_pin_3();
 
 // Motor current draw (mA) — for tuning CONTACT_CURRENT_MA/CEILING_CURRENT_MA
 // (lift.cpp) against the debug screen.

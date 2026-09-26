@@ -44,8 +44,18 @@ constexpr int GRAVITY_HOLD = 15;
 
 constexpr int STICK_DEADBAND = 10;
 
-// TODO(tune): how close to 0 counts as "done homing" in go_to_floor().
-constexpr double FLOOR_TOLERANCE_DEG = 10.0;
+// TODO(tune): how close counts as "arrived" for go_to_floor()/go_to_pin_1/2/3().
+constexpr double HEIGHT_TOLERANCE_DEG = 10.0;
+
+// TODO(tune): the three heights we actually need in a match -- the pin
+// going onto an empty goal, a goal with 1 pin on it already, and a goal
+// with 2. These are guesses spaced out across the still-unmeasured full
+// range (MAX_LIFT_HEIGHT_DEG, main.cpp), not numbers we've checked against
+// a real stack yet. Press the matching button, see how close it lands,
+// adjust, rebuild -- same as every other number in this file.
+constexpr double PIN_1_HEIGHT_DEG = 500;
+constexpr double PIN_2_HEIGHT_DEG = 1000;
+constexpr double PIN_3_HEIGHT_DEG = 1500;
 
 // TODO(tune): how far the lift can sag from where it was left before the
 // PID steps in to correct it. We added this after testing showed the
@@ -114,10 +124,26 @@ bool at_ceiling_now() {
 // PUBLIC CONTROL
 // ============================================================================
 
-void go_to_floor() {
+void go_to_height(double target_deg) {
   homing = true;
   holding = false;  // homing owns height_pid's target until it's done
-  height_pid.target_set(0);
+  height_pid.target_set(target_deg);
+}
+
+void go_to_floor() {
+  go_to_height(0);
+}
+
+void go_to_pin_1() {
+  go_to_height(PIN_1_HEIGHT_DEG);
+}
+
+void go_to_pin_2() {
+  go_to_height(PIN_2_HEIGHT_DEG);
+}
+
+void go_to_pin_3() {
+  go_to_height(PIN_3_HEIGHT_DEG);
 }
 
 void update(int stick) {
@@ -167,7 +193,7 @@ void update(int stick) {
   if (homing) {
     double out = height_pid.compute(position()) + GRAVITY_HOLD;
     motor.move(out);
-    if (std::fabs(position()) < FLOOR_TOLERANCE_DEG) homing = false;
+    if (std::fabs(position() - height_pid.target_get()) < HEIGHT_TOLERANCE_DEG) homing = false;
     return;
   }
 
