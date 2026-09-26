@@ -305,6 +305,13 @@ void auton_jerryio_test() {
   // before this runs (see main.cpp's LEFT binding).
   chassis.odom_xyt_set(7.5, 32, 270);
 
+  // Grab the starter pin right away, then bring the lift up just enough
+  // to hold it at cup height for the drive over -- TODO(tune):
+  // CUP_DROP_HEIGHT_DEG (lift.cpp) is a guess, never measured.
+  claw::close();
+  lift::go_to_cup_drop();
+  lift_wait();
+
   // CORRECTED 2026-09-27, second bug found the same day -- the first
   // fixed-heading version spun in circles and moved erratically. Cause:
   // EZ-Template's pid_odom_pp_set() silently switches an individual point
@@ -413,10 +420,35 @@ void auton_jerryio_test() {
   // Final facing for placing onto the goal -- kept as its own explicit
   // turn instead of a boomerang point in the path above, same reasoning
   // as everywhere else in this function now. 320 is PATH.JERRYIO's raw
-  // heading at this point, unconverted (see the note above
-  // auton_jerryio_test() for why no conversion is needed).
+  // heading at this point. TODO(verify): whether this needs converting at
+  // all is exactly the open question turn_direction_test() below is for --
+  // don't trust this number until that's answered.
   chassis.pid_turn_set(320, 90, true);
   chassis.pid_wait();
 
   claw::open();  // place the cup+pin onto the goal
+}
+
+// ============================================================================
+// TURN DIRECTION TEST
+// The jerryio path (above) turned out wrong twice in a row on the heading
+// side of things -- first driving the wrong way, then spinning in place
+// instead of translating. Re-deriving the angle convention from
+// documentation and source code a third time isn't worth trusting anymore;
+// this settles it with one simple, physical fact instead. Resets heading
+// to a clean 0, then asks for a turn to 90. Watch which way the robot
+// actually spins:
+//   - turns LEFT (counterclockwise, viewed from above) -> matches what
+//     EZ-Template's own source says it should do, the jerryio headings
+//     need no conversion, and the real bug is somewhere else (likely the
+//     lookahead distance vs. how short this path's legs are).
+//   - turns RIGHT (clockwise) -> the convention is backwards from what
+//     EZ-Template's docs/source say, headings need a manual sign flip
+//     (target = (360 - raw) % 360) wherever this project sets one.
+// ============================================================================
+void turn_direction_test() {
+  chassis.drive_imu_reset(0);
+  chassis.odom_xyt_set(0, 0, 0);
+  chassis.pid_turn_set(90, 60, true);
+  chassis.pid_wait();
 }

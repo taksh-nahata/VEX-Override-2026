@@ -57,6 +57,12 @@ constexpr double PIN_1_HEIGHT_DEG = 500;
 constexpr double PIN_2_HEIGHT_DEG = 1000;
 constexpr double PIN_3_HEIGHT_DEG = 1500;
 
+// TODO(tune): just enough to clear the ground and line the preload pin up
+// with a cup's opening while driving to it -- a much shorter lift than any
+// of the three placing heights above, which are for stacking onto a goal,
+// not dropping into a cup sitting on the floor. Pure guess, never measured.
+constexpr double CUP_DROP_HEIGHT_DEG = 150;
+
 // TODO(tune): how far the lift can sag from where it was left before the
 // PID steps in to correct it. We added this after testing showed the
 // first version of idle hold ran the PID every tick and made the lift
@@ -140,6 +146,10 @@ void go_to_floor() {
 
 void go_to_pin_1() {
   go_to_height(PIN_1_HEIGHT_DEG);
+}
+
+void go_to_cup_drop() {
+  go_to_height(CUP_DROP_HEIGHT_DEG);
 }
 
 void go_to_pin_2() {

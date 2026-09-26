@@ -302,6 +302,14 @@ void opcontrol() {
       auton_jerryio_test();
     }
 
+    // TEMPORARY -- one clean turn-to-90 from a reset zero, no path or odom
+    // math involved, to settle which way this robot actually turns for a
+    // positive target (see turn_direction_test() in autons.cpp for why).
+    // Remove once that's answered.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
+      turn_direction_test();
+    }
+
     // Lift: R1 raises, R2 lowers, that's the whole manual interface.
     if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
       lift::update(127);

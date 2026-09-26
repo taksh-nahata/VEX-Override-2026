@@ -34,6 +34,11 @@ void go_to_pin_1();
 void go_to_pin_2();
 void go_to_pin_3();
 
+// A shorter lift than any pin preset -- just enough to clear the ground
+// and hold a pin at cup-opening height while driving to drop it in.
+// Used by the WIP jerryio auton (autons.cpp).
+void go_to_cup_drop();
+
 // True while a go_to_floor()/go_to_pin_1/2/3() move is still in progress.
 // The lift only actually moves while something calls update() -- unlike
 // the chassis's own PID, it doesn't run on a background task -- so auton
