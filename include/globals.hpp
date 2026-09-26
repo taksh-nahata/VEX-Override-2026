@@ -1,10 +1,11 @@
 #pragma once
 
 // ============================================================================
-// PORT / DIRECTION PLACEHOLDERS
-// Flip a DIR_* between 1/-1 to reverse a motor/sensor instead of hunting
-// through subsystem code. Ports oriented with the back facing you, claw
-// facing away.
+// PORTS AND DIRECTIONS
+// We keep every port and spin direction in one place so fixing a wiring
+// mistake is a one-line change here instead of a hunt through subsystem
+// code. Flip a DIR_* between 1 and -1 to reverse a motor or sensor. Ports
+// assume the back of the robot is facing you and the claw is facing away.
 // ============================================================================
 
 // --- Drivetrain (4-motor skid-steer: 2 left, 2 right) --- confirmed
@@ -29,15 +30,18 @@ constexpr int PORT_ODOM_HORIZONTAL = 13 * DIR_ODOM_HORIZONTAL;
 constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — confirmed
 
 // Front-back distance from the tracking wheel to the robot's true turning
-// center (positive = behind center). NOT left-right offset — EZ-Template's
-// back/front trackers only correct for front-back placement. TODO(verify):
-// never measured, still 0.0 — see calibrate_spin() in autons.cpp.
+// center (positive = behind center). Not the left-right offset — EZ-Template's
+// back/front trackers only correct for front-back placement, and being
+// off-center side to side doesn't need a parameter here. TODO(verify):
+// we've never actually measured this, it's still a placeholder 0.0 — run
+// calibrate_spin() (autons.cpp) to get a real number without a tape measure.
 constexpr double ODOM_HORIZONTAL_OFFSET = 0.0;
 
 // --- DR4B lift (1 motor, second four-bar, 1:6 external reduction) --- confirmed
-// Rotation sensor mounted on the 72T (four-bar) shaft, past the reduction
-// — reads true arm angle instead of trusting the motor's encoder through
-// the gear mesh. See lift.cpp for how it's used.
+// The rotation sensor sits on the 72T (four-bar) shaft, past the
+// reduction, so it tells us the arm's real angle instead of us trusting
+// the motor's own encoder through the gear mesh. See lift.cpp for the
+// full reasoning and how each one gets used.
 constexpr int DIR_LIFT = 1;
 constexpr int PORT_LIFT = 1 * DIR_LIFT;
 

@@ -3,7 +3,9 @@
 
 // ============================================================================
 // PID / SLEW CONSTANTS
-// TODO(tune): carried over from last season's different robot.
+// TODO(tune): these are last season's numbers for a different robot, not
+// anything we've measured on this one -- placeholders so the drive
+// actually moves, not values to trust yet.
 // ============================================================================
 void default_constants() {
   chassis.pid_drive_constants_set(20.0, 0.0, 100.0);
@@ -25,7 +27,8 @@ void default_constants() {
 
 // ============================================================================
 // AUTONS
-// TODO(missing): empty stubs — write once driving/placement are dialed in.
+// TODO(missing): still empty. We wanted driving and placement solid
+// before locking in actual scoring routines, so these are stubs for now.
 // ============================================================================
 void auton_skills() {}
 void auton_button_1() {}
@@ -33,8 +36,10 @@ void auton_button_2() {}
 
 // ============================================================================
 // PID TUNER TEST MOVE
-// Runs while the tuner (main.cpp's X/B) is on, to exercise whatever PID is
-// selected: drives 24in (Drive PID), then turns 90deg (Turn PID).
+// Something to actually watch happen while the tuner (main.cpp's X/B) is
+// on: drives 24in to exercise Drive PID, then turns 90deg to exercise
+// Turn PID, so we're not just staring at numbers change with no move to
+// judge them against.
 // ============================================================================
 void tune_test() {
   chassis.pid_drive_set(24_in, 90, true);
@@ -45,21 +50,27 @@ void tune_test() {
 
 // ============================================================================
 // DRIVETRAIN CALIBRATION
-// For measuring the chassis constructor's gear ratio (main.cpp) and
-// ODOM_HORIZONTAL_OFFSET (globals.hpp) — the remaining unmeasured drive
-// numbers. Bound to A/LEFT in main.cpp; prints to brain line 5 + controller
-// line 2, and every tick logs to /usd/log.csv (sdlog.cpp).
+// Two test moves for the drivetrain numbers we still don't actually know:
+// the gear ratio in main.cpp's chassis constructor, and
+// ODOM_HORIZONTAL_OFFSET in globals.hpp. Bound to A/LEFT in main.cpp;
+// results print to brain line 5 and controller line 2, and every tick
+// also lands in /usd/log.csv (sdlog.cpp) in case we need to look closer
+// afterward.
 // ============================================================================
 
-// Raw encoder degrees, not inches (inches would bake in the gear ratio
-// this measures). 3600 = 10 motor shaft rotations.
+// We drive in raw encoder degrees here, not inches -- inches would
+// already assume the gear ratio we're trying to measure, which would
+// make the whole test circular. 3600 is 10 motor shaft rotations, enough
+// distance to tape-measure precisely.
 constexpr int CALIBRATE_DRIVE_DEGREES = 3600;
-constexpr int CALIBRATE_DRIVE_SPEED = 60;  // open-loop, not a PID move
+constexpr int CALIBRATE_DRIVE_SPEED = 60;  // open-loop, not a PID move -- we're not trusting distance yet
 
-// Tape-measure the real distance driven (M) and report it back:
+// Tape-measure the real distance driven (call it M) and tell us the
+// number. From there:
 //   new gear ratio = old gear ratio * (M / drive_in)
-// (tracker_in should already be close to M — a big gap there points at
-// ODOM_HORIZONTAL_OFFSET or tracker-wheel slop instead.)
+// If tracker_in is also off from M by a lot more than drive_in is, that
+// points at ODOM_HORIZONTAL_OFFSET or slop in the tracker wheel's mount
+// instead of the gear ratio.
 void calibrate_straight() {
   chassis.drive_sensor_reset();
   horizontal_tracker.reset();
@@ -78,10 +89,12 @@ void calibrate_straight() {
                        drive_in, tracker_in);
 }
 
-// A pure in-place spin has zero real sideways travel, so whatever lateral
-// inches the tracker reports is entirely ODOM_HORIZONTAL_OFFSET's fault --
-// no human measurement needed, the IMU's rotation count is ground truth.
-// More rotations = less noise in the estimate.
+// This one we figured out doesn't need a human measurement at all: a pure
+// in-place spin has zero real sideways travel, so any lateral inches the
+// tracker reports during one can only be explained by
+// ODOM_HORIZONTAL_OFFSET being wrong. The IMU's own rotation count gives
+// us ground truth for how far we actually spun, so we can solve for the
+// offset ourselves. More rotations averages out more of the noise.
 constexpr double CALIBRATE_SPIN_ROTATIONS = 8.0;
 constexpr int CALIBRATE_SPIN_SPEED = 70;
 
@@ -89,8 +102,9 @@ void calibrate_spin() {
   chassis.drive_imu_reset();
   horizontal_tracker.reset();
 
-  // ez::raw: literal target angle, not "shortest path" (which would see
-  // 8*360 as a no-op back to 0).
+  // ez::raw asks for the literal target angle instead of the shortest
+  // path there -- with "shortest path" behavior, 8 full rotations would
+  // just look like 0 and the robot wouldn't move at all.
   chassis.pid_turn_set(CALIBRATE_SPIN_ROTATIONS * 360.0, CALIBRATE_SPIN_SPEED, ez::raw);
   chassis.pid_wait();
 
@@ -102,7 +116,8 @@ void calibrate_spin() {
   master.print(0, 2, "off~%.2fin rot%.0f", offset_estimate, actual_rotation_deg);
   pros::screen::print(TEXT_MEDIUM, 5, "CALIB spin: rot=%.1fdeg lateral=%.2fin -> offset~%.3fin", actual_rotation_deg,
                        lateral_in, offset_estimate);
-  // Scales linearly with the tracker's true diameter -- if that's
-  // corrected later (from calibrate_straight()), rescale this by
-  // (new tracker diameter / old) instead of re-running the spin.
+  // This number scales with whatever the tracker's true wheel diameter
+  // turns out to be. If calibrate_straight() gives us a corrected
+  // diameter later, we can rescale this estimate by the ratio instead of
+  // running the spin over again.
 }

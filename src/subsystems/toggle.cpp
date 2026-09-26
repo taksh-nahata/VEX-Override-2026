@@ -10,17 +10,17 @@ namespace toggle {
 pros::Motor spinner(PORT_TOGGLE_SPINNER, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Optical color_sensor(PORT_TOGGLE_COLOR_SENSOR);
 
-// TODO(tune): calibrate against the real toggles under real field lighting —
-// these are unverified placeholder guesses.
+// TODO(tune): these are guesses, not numbers we've actually checked
+// against a real toggle under real field lighting.
 constexpr double HUE_RED_MAX = 20.0;
 constexpr double HUE_YELLOW_MIN = 45.0;
 constexpr double HUE_YELLOW_MAX = 65.0;
 constexpr double HUE_BLUE_MIN = 200.0;
 constexpr double HUE_BLUE_MAX = 250.0;
 
-// Which color the driver currently wants the toggle spun to. Picked with
-// controller buttons at match time (see main.cpp) rather than hardcoded,
-// since which color is "ours" depends on which alliance we're on.
+// Which color the driver wants the toggle spun to. We made this a
+// controller button at match time instead of hardcoding it, since which
+// color is "ours" depends on which alliance we're on that match.
 Color target = Color::RED;
 
 void initialize() {
@@ -43,9 +43,9 @@ Color target_color() {
   return target;
 }
 
-// Flips between red/blue — from yellow, goes to red. A separate button
-// (set_target_yellow()) handles yellow directly, since it's not part of
-// the red/blue alliance swap.
+// Flips between red and blue. From yellow it lands on red -- yellow gets
+// its own button (set_target_yellow()) since it isn't part of the
+// alliance-color swap.
 void toggle_target_red_blue() {
   target = (target == Color::BLUE) ? Color::RED : Color::BLUE;
 }

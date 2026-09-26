@@ -4,9 +4,11 @@
 
 // DR4B lift: 1 motor on the second four-bar, through a 1:6 external
 // reduction. position() reads a rotation sensor mounted past that
-// reduction (true arm angle), not the motor's own encoder.
+// reduction, so it's telling us the four-bar's real angle instead of us
+// inferring it from the motor's own encoder.
 //
-// Tunable constants live in lift.cpp, tagged TODO(tune)/TODO(verify).
+// Tunable constants and the reasoning behind them live in lift.cpp,
+// tagged TODO(tune)/TODO(verify).
 namespace lift {
 
 void initialize();
