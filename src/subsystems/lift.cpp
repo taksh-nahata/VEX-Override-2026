@@ -46,8 +46,9 @@ ez::PID height_pid(0.4, 0.0, 1.0, 0);
 // https://docs.wpilib.org/en/stable/docs/software/advanced-controls/introduction/tuning-vertical-arm.html.
 // A DR4B isn't a simple elevator (constant kG) or single-jointed arm
 // (kCos * cos(angle)) — real holding torque varies through the four-bar's
-// stroke — but a flat constant is a reasonable starting point. Only feeds
-// into the homing/PID branch below, NOT the idle brake-hold (see there).
+// stroke — but a flat constant is a reasonable starting point. Feeds into
+// both PID branches below (homing and idle hold) — anywhere height_pid
+// runs, gravity's fighting it the same way.
 constexpr int GRAVITY_HOLD = 15;
 
 constexpr int STICK_DEADBAND = 10;
@@ -89,6 +90,7 @@ constexpr int CONTACT_DEBOUNCE_TICKS = 5;
 // STATE
 // ============================================================================
 bool homing = false;
+bool holding = false;          // true once an idle hold target has been captured (see update())
 bool placing_contact = false;  // true right after a lowering move stopped on contact (see touched_down())
 bool at_ceiling = false;       // true right after a raising move stopped on contact (see at_ceiling_now())
 int contact_high_ticks = 0;    // consecutive ticks current has read high while lowering
@@ -100,6 +102,13 @@ double floor_reference = 0;  // updated to "here" each time the floor limit is r
 // QUERIES
 // ============================================================================
 
+// IMPORTANT: this zeros position() to wherever the lift physically is
+// right now, not to any true fixed reference — the rotation sensor has no
+// memory of "true floor" across a power cycle, same as the motor's own
+// encoder wouldn't. Everything downstream (the floor limit, and
+// MAX_LIFT_HEIGHT_DEG in main.cpp) assumes 0 means true floor, so the team
+// has to physically power on with the lift all the way down every time.
+// Cheap fix, no code — see TODO.md.
 void initialize() {
   motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   rotation.reset_position();
@@ -165,6 +174,7 @@ bool floor_limit_on() {
 // back, e.g. to actually exercise GRAVITY_HOLD above.
 void go_to_floor() {
   homing = true;
+  holding = false;  // homing owns height_pid's target until it finishes
   height_pid.target_set(0);
 }
 
@@ -173,6 +183,7 @@ void go_to_floor() {
 void update(int stick) {
   if (std::abs(stick) > STICK_DEADBAND) {
     homing = false;
+    holding = false;  // re-capture a fresh hold target next time it idles
 
     if (stick < 0) {
       at_ceiling = false;
@@ -238,12 +249,21 @@ void update(int stick) {
     return;
   }
 
-  // Idle hold: brake_mode HOLD (set in initialize()) is a real closed-loop
-  // mechanism at the motor firmware level — move(0) here engages it, it
-  // doesn't just coast. Don't add GRAVITY_HOLD or any other constant on
-  // top of this; that would override the firmware's own feedback with a
-  // cruder open-loop guess instead of complementing it.
-  motor.move(0);
+  // Idle hold: actively servos against gravity instead of just relying on
+  // brake_mode HOLD (still set in initialize(), but on its own it wasn't
+  // enough — confirmed 2026-09-25, the single motor driving the whole DR4B
+  // through the 1:6 reduction sags out of brake-hold alone). Captures
+  // wherever the lift was the instant the stick let go as the target, then
+  // uses the rotation sensor to correct back to it if it drifts — a real
+  // closed loop, not a blind constant push. Re-captured fresh every time
+  // (holding flips false in the stick branch above) so it always holds
+  // "wherever you left it," not some stale height from earlier.
+  if (!holding) {
+    holding = true;
+    height_pid.target_set(position());
+  }
+  double out = height_pid.compute(position()) + GRAVITY_HOLD;
+  motor.move(out);
 }
 
 }  // namespace lift

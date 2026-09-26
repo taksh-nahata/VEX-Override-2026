@@ -1,14 +1,14 @@
 # What's left — Override 2026
 
-Plain-language status, updated 2026-09-20. "Code" items need a programmer; everything else is hardware/testing anyone on the team can do. Coders: every tunable number in the actual code is tagged `TODO(tune)`, `TODO(verify)`, `TODO(mechanical)`, or `TODO(missing)` — `grep -rn "TODO("` in `src/`/`include/` for the exact list this doc summarizes.
+Plain-language status, updated 2026-09-25. "Code" items need a programmer; everything else is hardware/testing anyone on the team can do. Coders: every tunable number in the actual code is tagged `TODO(tune)`, `TODO(verify)`, `TODO(mechanical)`, or `TODO(missing)` — `grep -rn "TODO("` in `src/`/`include/` for the exact list this doc summarizes.
 
 ## Done
-- All motor/sensor ports wired and confirmed correct — two ports swapped 2026-09-20 to make room for the new lift motor (drivetrain right-back motor moved from port 20 to 15, lift motor took port 20; see "Lift rebuild" below).
-- All motor spin directions bench-tested and fixed (drivetrain, toggle spinner, odometry wheel). Lift direction needs rechecking — see below, it's new hardware.
+- All motor/sensor ports wired and confirmed correct — several moved around 2026-09-20/25 to make room for the new lift motor + rotation sensor (drivetrain right-back motor: 20 → 15; lift motor: 20 → 1; lift rotation sensor: 12 → 8; see "Lift rebuild" below).
+- All motor spin directions bench-tested and fixed (drivetrain, toggle spinner, odometry wheel, and now the new single lift motor + its rotation sensor — both confirmed 2026-09-25, and they needed different fixes: the motor's direction was already right, the rotation sensor's was backwards).
 - Claw tested and working.
 - Drivetrain confirmed driving correctly. Wheel size (2.75" drive, 2" odom) and the drive's external gear ratio (36T motor / 48T wheel) are now all confirmed exactly, not just "sounded right."
 - **Lift rebuilt from 2 motors to 1** (2026-09-20) — see "Lift rebuild" below, this replaced the old crooked-lift problem instead of working around it.
-- Lift has: a floor limit (won't drive below where it started), an automatic ceiling limit (stops before the gear cartridge skips at the top — no calibration needed, it just senses it), and a "landed on something" stop while lowering.
+- Lift has: a floor limit (won't drive below where it started), an automatic ceiling limit (stops before the gear cartridge skips at the top — no calibration needed, it just senses it), a "landed on something" stop while lowering, and an active idle hold (2026-09-25) — it now servos against gravity to stay exactly where you left it instead of just relying on the motor's own brake, which turned out not to be strong enough on its own for one motor carrying the whole arm.
 - Physical anti-tip bar — in progress.
 - Custom on-screen menu at boot: real team logo + our own buttons for picking the autonomous routine, replacing the old generic-looking one. Builds and links clean — **still needs someone to actually upload and look at the brain screen to confirm it works right**, same as any other change; this one just had a rockier road getting there (see below).
 - Controller rumble on key events (pin landed, hit ceiling, red detected) and an endgame warning at the 20-second mark — the brain's screen isn't visible to the driver mid-match, so this is the feedback that actually reaches them.
@@ -24,11 +24,11 @@ Plain-language status, updated 2026-09-20. "Code" items need a programmer; every
 The old 2-motor lift had a left gear seated one tooth off from the right, which made it look crooked and caused the current sensors to fire randomly no matter how the software was tuned — a real physical mismatch, not something code could fix. Rather than reseat that gear, the team switched to **1 motor** mounted on the second four-bar through a 1:6 external reduction (12T on the motor, 72T on the four-bar's shaft), plus a **rotation sensor** mounted on that same 72T shaft to read the arm's true angle directly instead of trusting the motor's encoder through the gear mesh. Confirmed on the bench: no more skipping.
 
 This is brand new hardware, so:
-- **Both the motor's direction and the rotation sensor's direction need a bench check with R1**, same as every other actuator this project — don't assume either is right just because a default was picked in code. They're independent checks; the sensor could read backwards even if the motor spins the right way.
+- ~~Both the motor's direction and the rotation sensor's direction need a bench check with R1~~ — **done 2026-09-25**: motor was already correct, rotation sensor was backwards (read negative going up) and got flipped in code.
 - Every number that was tuned against the old lift's "degrees" (floor tolerance, the anti-tip height cutoff) is now measuring something different — the rotation sensor sits past the new 1:6 reduction, so a degree now covers about 6x the arm movement it used to. These all need fresh real-world numbers, not leftover ones from before the rebuild.
+- **Always power the robot on with the lift all the way down at true floor.** The rotation sensor zeros to wherever the lift physically is the moment the robot boots, not to any permanent reference — so the floor limit and the anti-tip height cutoff only mean what they're supposed to if "0" is consistently the real floor. This is a pit habit now, not a one-time setup step.
 
 ## Quick bench tests (a few minutes each, no coding — just watch the brain screen)
-- **Lift motor + rotation sensor direction** (see above — do this first, before anything else lift-related).
 - **Tip-testing**: with a spotter holding the robot (lift LOW to start, anti-tip bar as backup), gently tilt it and watch the screen to figure out (a) how tilted is "actually about to tip" and (b) whether the auto-correction drives the right way. Our best guess says the direction is probably already correct, but "probably" isn't good enough to trust blind.
 - **Pin-landing / ceiling sensor tuning**: lower the lift onto a real stack, and separately raise it to its mechanical top, watching the current number on screen (or the SD card log afterward) each time.
 - **Measure the lift's full height** on the new rotation sensor's numbers (not carried over from the old lift) so the anti-tip speed-limiting scales correctly.
