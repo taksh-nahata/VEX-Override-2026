@@ -34,6 +34,12 @@ void go_to_pin_1();
 void go_to_pin_2();
 void go_to_pin_3();
 
+// True while a go_to_floor()/go_to_pin_1/2/3() move is still in progress.
+// The lift only actually moves while something calls update() -- unlike
+// the chassis's own PID, it doesn't run on a background task -- so auton
+// code has to poll this and keep calling update(0) itself while waiting.
+bool is_homing();
+
 // Motor current draw (mA) — for tuning CONTACT_CURRENT_MA/CEILING_CURRENT_MA
 // (lift.cpp) against the debug screen.
 std::int32_t current_ma();

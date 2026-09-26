@@ -48,8 +48,16 @@ This is brand new hardware, so:
 - Toggle color sensor thresholds — never tuned against the real toggles under real lighting.
 
 ## Not written yet
-- **Actual autonomous routines.** The framework for 3 auton slots exists, but the actual scoring paths/moves are all empty right now — someone needs to write these once driving and placement are dialed in.
 - LQR for drivetrain control — flagged as worth investigating once we get to auton routines specifically (better fit for tracking precision than for anti-tip, which needs the physical bar more than fancier math).
+
+## First auto written (2026-09-26) — needs real field numbers before it'll work
+`auton_button_1()` (`autons.cpp`) scores the preload, then does 2 Loader cycles for a 3-pin auto total, going for the 12-point auto bonus (easy — just outscore the other alliance's auto) rather than the 7-pin Autonomous Win Point (not realistic without an intake in 15 seconds — every grab needs precise alignment a claw can't do quickly). Uses the Pin 1/2/3 height presets from above, in order, as it stacks each pin.
+
+Every drive distance and turn angle in it is a placeholder — **someone needs to pace out or measure the real distances from the starting tile to the goal and to the Loader** and report them back. Also still open:
+- Does grabbing from the Loader need the lift at a specific height, or is floor height fine? If it needs its own height, that's a 4th preset the same way the pin ones work.
+- Does the claw need to be open or closed to receive a pin from the Loader? Assumed open (same state it's in right after dropping a pin) — worth confirming on the real Loader.
+- 15 seconds is tight for 3 full Loader cycles, especially with Drive/Turn PID still untuned. Time it for real once the distances are filled in — don't be surprised if it needs cutting to 2 pins (preload + 1 cycle) to actually fit.
+- `auton_button_2()` and `auton_skills()` are still stubs — skills is its own game mode with different timing, not just a longer version of this, so it needs its own plan later.
 
 ## Ideas floated, not committed to
 - Toggle auto-spin-to-alliance-color — held off because we're not 100% sure how the toggle mechanism physically works (spin vs. lift-and-flip). Check VEX's official field build video first.

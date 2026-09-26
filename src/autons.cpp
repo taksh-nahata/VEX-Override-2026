@@ -27,12 +27,105 @@ void default_constants() {
 
 // ============================================================================
 // AUTONS
-// TODO(missing): still empty. We wanted driving and placement solid
-// before locking in actual scoring routines, so these are stubs for now.
+// auton_button_1() is our first real match auto (see below). Skills is its
+// own separate game mode with its own timing, not just a longer version of
+// this, so it's staying a stub until we're actually ready to plan that.
+// auton_button_2() is open for a second variant later -- e.g. the other
+// starting side, or a safer fallback if button_1 turns out too tight on
+// time once it's tested for real.
 // ============================================================================
 void auton_skills() {}
-void auton_button_1() {}
 void auton_button_2() {}
+
+// Blocks until the current lift preset move actually settles. The lift
+// only moves while something calls lift::update() -- it's not on its own
+// background task the way the chassis's drive PID is -- so auton has to
+// keep feeding it ticks itself while it waits, the same job opcontrol()'s
+// loop normally does. The timeout is a safety net so one preset that never
+// quite settles can't eat the whole 15-second auto by itself.
+void lift_wait(std::uint32_t timeout_ms = 1000) {
+  std::uint32_t start = pros::millis();
+  while (lift::is_homing() && pros::millis() - start < timeout_ms) {
+    lift::update(0);
+    pros::delay(10);
+  }
+}
+
+// ============================================================================
+// AUTON: BUTTON 1 -- first real auto, scores the preload plus 2 Loader
+// cycles for 3 pins total. We're going for the Loader instead of picking
+// pins up off the open field on purpose: with no intake, every grab needs
+// precise alignment, and the Loader sits in the same fixed spot every
+// match, so it's something we can actually aim at reliably without vision.
+// Chasing the full 7-pin Autonomous Win Point isn't realistic without an
+// intake in 15 seconds -- this is aimed at the much easier 12-point auto
+// bonus (just outscoring the other alliance's auto) instead.
+//
+// TODO(measure): every DRIVE_*/TURN_* constant below is a placeholder.
+// Pace out (or measure) the real distances/angles from the actual starting
+// tile to the goal and to the Loader and fill these in -- inventing
+// plausible-sounding numbers without measuring the real field would just
+// be wrong. TODO(verify): does grabbing from the Loader need the lift at a
+// specific height, or is floor height fine? If it needs its own height,
+// that's a 4th preset the same way go_to_pin_1/2/3() work.
+//
+// TODO(tune): 15 seconds is tight for 3 full Loader cycles once realistic
+// PID move times are accounted for, especially with Drive/Turn PID still
+// untuned -- time this for real once the distances below are filled in,
+// and don't be surprised if it needs cutting back to 2 pins (preload +
+// 1 cycle) to actually fit.
+constexpr double DRIVE_TO_GOAL_IN = 12;
+constexpr double TURN_TO_LOADER_DEG = 90;
+constexpr double DRIVE_TO_LOADER_IN = 12;
+constexpr double TURN_TO_GOAL_DEG = -90;
+constexpr int AUTON_DRIVE_SPEED = 90;
+constexpr int AUTON_TURN_SPEED = 90;
+
+void auton_button_1() {
+  // Preload starts secured in the claw already -- first move is straight
+  // to scoring it, no grab needed.
+  lift::go_to_pin_1();  // empty goal height
+  lift_wait();
+  chassis.pid_drive_set(DRIVE_TO_GOAL_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_wait();
+  claw::open();
+  pros::delay(200);  // let the pin actually clear the claw before we move again
+
+  // Loader cycle #1 -> pin #2, stacked on top of the preload.
+  chassis.pid_turn_set(TURN_TO_LOADER_DEG, AUTON_TURN_SPEED, true);
+  chassis.pid_wait();
+  chassis.pid_drive_set(DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_wait();
+  claw::close();  // grab from the Loader
+  pros::delay(200);
+  chassis.pid_drive_set(-DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_wait();
+  chassis.pid_turn_set(TURN_TO_GOAL_DEG, AUTON_TURN_SPEED, true);
+  chassis.pid_wait();
+  lift::go_to_pin_2();  // goal now has 1 pin on it
+  lift_wait();
+  chassis.pid_drive_set(DRIVE_TO_GOAL_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_wait();
+  claw::open();
+  pros::delay(200);
+
+  // Loader cycle #2 -> pin #3.
+  chassis.pid_turn_set(TURN_TO_LOADER_DEG, AUTON_TURN_SPEED, true);
+  chassis.pid_wait();
+  chassis.pid_drive_set(DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_wait();
+  claw::close();
+  pros::delay(200);
+  chassis.pid_drive_set(-DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_wait();
+  chassis.pid_turn_set(TURN_TO_GOAL_DEG, AUTON_TURN_SPEED, true);
+  chassis.pid_wait();
+  lift::go_to_pin_3();  // goal now has 2 pins on it
+  lift_wait();
+  chassis.pid_drive_set(DRIVE_TO_GOAL_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_wait();
+  claw::open();
+}
 
 // ============================================================================
 // PID TUNER TEST MOVE
