@@ -256,24 +256,29 @@ void calibrate_spin() {
 // The matching transform for that convention is: new_heading = (360 -
 // raw_heading) % 360.
 //
-// CORRECTED 2026-09-27 -- the first version of this transform sent the
-// robot the wrong way on headings. Root cause: PATH.JERRYIO's angle
-// convention (confirmed directly in its own UI: 0deg=+Y, 90deg=+X,
-// increasing CLOCKWISE) and EZ-Template's internal convention (confirmed
-// by reading EZ-Template's own tracking.cpp source: 0deg=+Y also, but
-// increasing COUNTERCLOCKWISE) rotate opposite ways around the same
-// reference direction. Separately, mirroring the X axis (needed for the
-// corner-origin move above) ALSO reverses which way angles wind, for the
-// same reason a mirror image swaps clockwise and counterclockwise. Two
-// reversals cancel out -- so the heading EZ-Template actually needs is
-// PATH.JERRYIO's raw, un-mirrored heading value, unchanged. The position
-// (x/y) transform is a separate thing and isn't affected by any of this;
-// it's still the shift + X-mirror described above.
+// CORRECTED 2026-09-27, twice. First pass sent the robot the wrong way.
+// Second pass ("the two conventions rotate opposite ways, and the X-mirror
+// reverses rotation too, so they cancel out -- use PATH.JERRYIO's raw
+// heading unconverted") was reasoned from documentation and EZ-Template's
+// source code, and turned out ALSO wrong -- the robot lost control and
+// spun in circles. Re-deriving this a third time from reading wasn't
+// worth trusting anymore, so it got settled with a real, isolated,
+// physical test instead: turn_direction_test() (bottom of this file),
+// which asks for a plain turn to a target of 90 from a freshly reset
+// zero, nothing else going on. Confirmed result: the robot turns
+// physically RIGHT for a positive target, matching PATH.JERRYIO's own
+// clockwise convention directly -- meaning EZ-Template needs NO
+// CW/CCW conversion at all here (whatever the source code seemed to say),
+// and the mirror transform is the ONLY correction needed:
+// new_heading = (360 - raw_heading) % 360. That's what's actually used
+// below now. The position (x/y) transform is separate and was never in
+// question; it's still the shift + X-mirror described above.
 //
-// TODO(verify): still only checked against the raw file's own geometry
-// and the two conventions' own documentation/source, not against the
-// real field yet -- run this once the path is finished and confirm the
-// first few feet actually go where the team's PATH.JERRYIO picture shows.
+// TODO(verify): the position/heading transform is now checked against a
+// real physical test (turn_direction_test()), not just documentation --
+// more confidence than before, but still only one data point. Confirm the
+// first few feet of the real path go where the team's PATH.JERRYIO
+// picture shows before trusting the rest of it blind.
 //
 // TODO(verify): speed values below are hand-adjusted from the file's flat
 // 120 everywhere -- slower approaching the pickup (precision matters more
@@ -303,7 +308,10 @@ void auton_jerryio_test() {
   // needs to know where it's actually starting from. Only correct if the
   // robot is really placed at this path's starting tile/orientation
   // before this runs (see main.cpp's LEFT binding).
-  chassis.odom_xyt_set(7.5, 32, 270);
+  // Heading here is PATH.JERRYIO's raw value MIRRORED, (360 - 270) % 360
+  // = 90 -- see turn_direction_test()'s result below for why this is 90
+  // and not the raw 270.
+  chassis.odom_xyt_set(7.5, 32, 90);
 
   // Grab the starter pin right away, then bring the lift up just enough
   // to hold it at cup height for the drive over -- TODO(tune):
@@ -419,11 +427,10 @@ void auton_jerryio_test() {
 
   // Final facing for placing onto the goal -- kept as its own explicit
   // turn instead of a boomerang point in the path above, same reasoning
-  // as everywhere else in this function now. 320 is PATH.JERRYIO's raw
-  // heading at this point. TODO(verify): whether this needs converting at
-  // all is exactly the open question turn_direction_test() below is for --
-  // don't trust this number until that's answered.
-  chassis.pid_turn_set(320, 90, true);
+  // as everywhere else in this function now. Mirrored, (360 - 320) % 360
+  // = 40, same reasoning as the start heading above -- confirmed with
+  // turn_direction_test() below, not re-derived from docs.
+  chassis.pid_turn_set(40, 90, true);
   chassis.pid_wait();
 
   claw::open();  // place the cup+pin onto the goal
