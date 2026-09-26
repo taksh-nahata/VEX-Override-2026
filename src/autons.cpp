@@ -261,17 +261,30 @@ void calibrate_spin() {
 // once the path is finished and confirm the first few feet actually go
 // where the team's PATH.JERRYIO picture shows before trusting the rest.
 //
-// TODO(verify): every point below is ez::fwd right now. The team asked
-// separately how to make part of this path drive backwards instead of
-// turning -- that's a per-point drive_direction (ez::fwd vs ez::rev, see
-// the odom struct in EZ-Template/util.hpp), and needs the team to say
-// which stretches of the finished path should be reverse, not something
-// we can guess from the exported file alone.
+// TODO(verify): speed values below are hand-adjusted from the file's flat
+// 120 everywhere -- slower approaching the pickup (precision matters more
+// than time there) and through the two sharpest direction changes in the
+// path (checked by computing the actual turning angle between consecutive
+// points -- found real ~46/~99 deg swings around the pickup exit and a
+// ~140 deg swing near the very end, not just eyeballed). Still guesses,
+// not measured against what this drivetrain can actually track reliably
+// at speed -- retune once this runs for real.
 //
-// TODO(verify): speed values below (120, from the file) are carried over
-// as-is -- haven't confirmed PATH.JERRYIO's speed units actually match
-// what EZ-Template's max_xy_speed expects here.
+// The whole thing is split into two pid_odom_pp_set() calls, not one,
+// because of what happens in between: drive to the cup+pin, drop the
+// preload pin into the cup, grab the whole cup, back off, spin 180, then
+// continue driving the rest of the path with the cup. Pure pursuit can't
+// pause mid-path for that on its own, so the path is cut exactly where
+// that stop needs to happen.
+//
+// The cut point is exactly where the team placed a control point in
+// PATH.JERRYIO at 6.295in of travel from the start -- confirmed by
+// walking cumulative distance through the raw file's own points rather
+// than guessing which one they meant: it lands, almost exactly, on point
+// index 8 below (cumulative distance comes out to 6.295in there, matching
+// to three decimal places).
 void auton_jerryio_test() {
+  // Leg 1: start to the cup+pin.
   chassis.pid_odom_pp_set(
       std::vector<odom>{
           {{9.156, 35.064, 90.0}, ez::fwd, 120},
@@ -279,17 +292,53 @@ void auton_jerryio_test() {
           {{10.707, 34.843}, ez::fwd, 120},
           {{11.421, 34.513}, ez::fwd, 120},
           {{12.067, 34.065}, ez::fwd, 120},
-          {{12.665, 33.552}, ez::fwd, 120},
-          {{13.247, 33.022}, ez::fwd, 120},
-          {{13.839, 32.502}, ez::fwd, 120},
-          {{14.455, 32.013}, ez::fwd, 120},
+          {{12.665, 33.552}, ez::fwd, 100},
+          {{13.247, 33.022}, ez::fwd, 80},
+          {{13.839, 32.502}, ez::fwd, 50},
+          {{14.455, 32.013}, ez::fwd, 30},  // pickup point -- 6.295in from start
+      },
+      true);
+  chassis.pid_wait();
+
+  // Preload pin should already be in the claw -- drop it into the cup,
+  // then grab the whole cup (now holding both).
+  // TODO(verify): guessing this is a plain open-then-close on the same
+  // claw -- confirm the actual sequence against the real mechanism, this
+  // isn't something we can know without seeing it work.
+  claw::open();
+  pros::delay(300);
+  claw::close();
+  pros::delay(300);
+
+  // Back off before turning -- TODO(measure): "a bit" is a placeholder,
+  // get the real distance from the team once this is tested.
+  constexpr double REVERSE_AFTER_PICKUP_IN = 6;
+  chassis.pid_drive_set(-REVERSE_AFTER_PICKUP_IN, 60, true);
+  chassis.pid_wait();
+
+  // Turn 180 off wherever leg 1 actually ended up facing, not a fixed
+  // absolute heading -- the pickup point has no explicit heading of its
+  // own in the path (it's a plain curve sample, not one of the deliberate
+  // heading break-points), so this is a relative turn from whatever
+  // heading pure pursuit left the robot at.
+  chassis.pid_turn_set(chassis.imu.get_heading() + 180, 90, true);
+  chassis.pid_wait();
+
+  // Leg 2: continue from the same point on to the goal, now carrying the
+  // cup+pin. TODO(verify): kept as ez::fwd since the team described this
+  // as "keep going forwards" after the 180 -- worth confirming on the
+  // bench that driving nose-first is actually correct here and the path
+  // wasn't drawn assuming the robot stays reversed through this leg.
+  chassis.pid_odom_pp_set(
+      std::vector<odom>{
+          {{14.455, 32.013}, ez::fwd, 30},
           {{15.101, 31.563}, ez::fwd, 120},
           {{15.775, 31.156}, ez::fwd, 120},
           {{16.475, 30.794}, ez::fwd, 120},
-          {{17.194, 30.475}, ez::fwd, 120},
-          {{17.930, 30.195}, ez::fwd, 120},
-          {{18.186, 30.315, 130.0}, ez::fwd, 120},
-          {{17.740, 30.963}, ez::fwd, 120},
+          {{17.194, 30.475}, ez::fwd, 90},
+          {{17.930, 30.195}, ez::fwd, 70},
+          {{18.186, 30.315, 130.0}, ez::fwd, 60},
+          {{17.740, 30.963}, ez::fwd, 70},
           {{17.294, 31.612}, ez::fwd, 120},
           {{16.848, 32.261}, ez::fwd, 120},
           {{16.402, 32.910}, ez::fwd, 120},
@@ -302,11 +351,13 @@ void auton_jerryio_test() {
           {{15.501, 37.780}, ez::fwd, 120},
           {{16.090, 38.302}, ez::fwd, 120},
           {{16.723, 38.769}, ez::fwd, 120},
-          {{17.368, 39.222}, ez::fwd, 120},
-          {{18.002, 39.688}, ez::fwd, 120},
-          {{18.598, 40.186, 40.0}, ez::fwd, 120},
+          {{17.368, 39.222}, ez::fwd, 90},
+          {{18.002, 39.688}, ez::fwd, 70},
+          {{18.598, 40.186, 40.0}, ez::fwd, 60},
           {{18.598, 40.186, 40.0}, ez::fwd, 0},
       },
       true);
   chassis.pid_wait();
+
+  claw::open();  // place the cup+pin onto the goal
 }
