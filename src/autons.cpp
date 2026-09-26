@@ -284,10 +284,17 @@ void calibrate_spin() {
 // index 8 below (cumulative distance comes out to 6.295in there, matching
 // to three decimal places).
 void auton_jerryio_test() {
+  // Tells the chassis "you are physically at the path's starting point
+  // right now" -- pure pursuit drives toward field coordinates, so it
+  // needs to know where it's actually starting from. Only correct if the
+  // robot is really placed at this path's starting tile/orientation
+  // before this runs (see main.cpp's LEFT binding).
+  chassis.odom_xyt_set(7.5, 35.064, 90);
+
   // Leg 1: start to the cup+pin.
   chassis.pid_odom_pp_set(
       std::vector<odom>{
-          {{9.156, 35.064, 90.0}, ez::fwd, 120},
+          {{7.5, 35.064, 90.0}, ez::fwd, 120},
           {{9.942, 35.021}, ez::fwd, 120},
           {{10.707, 34.843}, ez::fwd, 120},
           {{11.421, 34.513}, ez::fwd, 120},
