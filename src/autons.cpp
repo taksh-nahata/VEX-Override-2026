@@ -100,6 +100,7 @@ constexpr int CALIBRATE_SPIN_SPEED = 70;
 
 void calibrate_spin() {
   chassis.drive_imu_reset();
+  chassis.odom_xyt_set(0, 0, 0);  // clean slate so odom_x/odom_y below start at true 0
   horizontal_tracker.reset();
 
   // ez::raw asks for the literal target angle instead of the shortest
@@ -113,11 +114,15 @@ void calibrate_spin() {
   double radians = actual_rotation_deg * (M_PI / 180.0);
   double offset_estimate = radians != 0 ? lateral_in / radians : 0;
 
-  master.print(0, 2, "off~%.2fin rot%.0f", offset_estimate, actual_rotation_deg);
-  pros::screen::print(TEXT_MEDIUM, 5, "CALIB spin: rot=%.1fdeg lateral=%.2fin -> offset~%.3fin", actual_rotation_deg,
-                       lateral_in, offset_estimate);
-  // This number scales with whatever the tracker's true wheel diameter
-  // turns out to be. If calibrate_straight() gives us a corrected
-  // diameter later, we can rescale this estimate by the ratio instead of
-  // running the spin over again.
+  // Two different numbers here, for two different moments: offset_estimate
+  // (from lateral_in, the raw wheel reading) is what we solved
+  // ODOM_HORIZONTAL_OFFSET from the first time this test ran. odom_x/odom_y
+  // are the chassis's own corrected position estimate, which is what
+  // actually uses that constant -- run this test again after applying a
+  // fix and check THESE stay near 0, not lateral_in again (that number
+  // doesn't change just because we updated the constant).
+  master.print(0, 2, "odX%.2f odY%.2f", chassis.odom_x_get(), chassis.odom_y_get());
+  pros::screen::print(TEXT_MEDIUM, 5,
+                       "CALIB spin: rot=%.1fdeg raw_lateral=%.2fin off_est~%.3fin  odom_x=%.2f odom_y=%.2f",
+                       actual_rotation_deg, lateral_in, offset_estimate, chassis.odom_x_get(), chassis.odom_y_get());
 }

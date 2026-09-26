@@ -29,13 +29,22 @@ constexpr int DIR_ODOM_HORIZONTAL = -1;  // confirmed: push robot right -> readi
 constexpr int PORT_ODOM_HORIZONTAL = 13 * DIR_ODOM_HORIZONTAL;
 constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — confirmed
 
-// Front-back distance from the tracking wheel to the robot's true turning
-// center (positive = behind center). Not the left-right offset — EZ-Template's
-// back/front trackers only correct for front-back placement, and being
-// off-center side to side doesn't need a parameter here. TODO(verify):
-// we've never actually measured this, it's still a placeholder 0.0 — run
-// calibrate_spin() (autons.cpp) to get a real number without a tape measure.
-constexpr double ODOM_HORIZONTAL_OFFSET = 0.0;
+// Distance from the tracking wheel to the robot's true turning center.
+// Not the left-right offset — EZ-Template's back/front trackers only
+// correct for front-back placement, and being off-center side to side
+// doesn't need a parameter here.
+//
+// Measured 2026-09-26 with calibrate_spin() (autons.cpp): spun the robot
+// 8 full rotations in place with this at 0.0 and read off how much
+// sideways drift the tracking wheel picked up from a move that should
+// have had none. We plug that number in directly, sign and all, rather
+// than assuming which sign means "in front" vs. "behind" — we don't have
+// visibility into which convention EZ-Template's odometry math actually
+// uses internally, and getting that guess wrong would be worse than just
+// trusting the number the test produced. Re-running calibrate_spin() now
+// checks chassis.odom_x_get()/odom_y_get() (the corrected position, not
+// the raw wheel reading) to confirm this actually zeroed the drift out.
+constexpr double ODOM_HORIZONTAL_OFFSET = -1.97;
 
 // --- DR4B lift (1 motor, second four-bar, 1:6 external reduction) --- confirmed
 // The rotation sensor sits on the 72T (four-bar) shaft, past the
