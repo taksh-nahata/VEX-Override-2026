@@ -57,15 +57,14 @@ constexpr double ODOM_HORIZONTAL_OFFSET = 0.0;
 // for how it's actually used (position, not current/driving — that's
 // still the motor).
 //
-// TODO(verify): both DIR_LIFT and DIR_LIFT_ROTATION are guesses (DIR_LIFT
-// matches the old DIR_LIFT_L) — confirm each with R1 like every other
-// actuator's direction this project, don't trust either blind just because
-// it's a default. They're independent: the rotation sensor could easily
-// read backwards from the motor even if the motor's sign is already right.
+// Both directions bench-tested 2026-09-25: DIR_LIFT was already right,
+// DIR_LIFT_ROTATION was backwards (read negative going up) and got flipped
+// — confirming they're genuinely independent signs, not the same check
+// twice.
 constexpr int DIR_LIFT = 1;
 constexpr int PORT_LIFT = 1 * DIR_LIFT;  // moved from 20 to 1, 2026-09-25
 
-constexpr int DIR_LIFT_ROTATION = 1;
+constexpr int DIR_LIFT_ROTATION = -1;  // confirmed 2026-09-25: was reading negative going up
 constexpr int PORT_LIFT_ROTATION = 8 * DIR_LIFT_ROTATION;  // moved from 12 to 8, 2026-09-25
 
 // --- Claw (1 solenoid) --- confirmed port
