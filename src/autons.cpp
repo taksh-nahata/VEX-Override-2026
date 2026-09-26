@@ -96,7 +96,13 @@ void calibrate_straight() {
 // us ground truth for how far we actually spun, so we can solve for the
 // offset ourselves. More rotations averages out more of the noise.
 constexpr double CALIBRATE_SPIN_ROTATIONS = 8.0;
-constexpr int CALIBRATE_SPIN_SPEED = 70;
+// Dropped from 70 to 35 (2026-09-26) as a one-off test -- the robot was
+// landing a little off-angle after a spin, and we want to see whether
+// that's the IMU's gyro getting less accurate at higher spin speeds
+// (would improve at 35) or just Turn PID's exit tolerance being loose
+// (wouldn't change with speed, and is a separate tuning job anyway). Put
+// this back to 70 once that's answered.
+constexpr int CALIBRATE_SPIN_SPEED = 35;
 
 void calibrate_spin() {
   chassis.drive_imu_reset();
