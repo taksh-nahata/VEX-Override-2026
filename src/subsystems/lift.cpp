@@ -52,6 +52,16 @@ ez::PID height_pid(0.4, 0.0, 1.0, 0);
 constexpr int GRAVITY_HOLD = 15;
 
 constexpr int STICK_DEADBAND = 10;
+// TODO(tune): how far position() can drift from the captured idle-hold
+// target before the active PID correction kicks in. Below this, idle just
+// calls motor.move(0) and leaves it to the motor's own brake_mode HOLD —
+// which resists an external hand-push far harder than a software PID
+// correcting once every ~20ms tick can. Confirmed 2026-09-25: without this
+// deadband, idle was running the PID continuously, which made the lift
+// noticeably easy to backdrive by hand instead of feeling locked in place.
+// The PID only needs to take over for the slow gravity sag brake-hold
+// alone couldn't stop — not for every tiny nudge.
+constexpr double HOLD_TOLERANCE_DEG = 5.0;
 // TODO(tune): position() reads a rotation sensor past the new 1:6 external
 // reduction as of 2026-09-20, not a motor's own encoder — a "degree" here
 // covers ~6x the arm movement a raw motor degree used to, so this
@@ -91,6 +101,7 @@ constexpr int CONTACT_DEBOUNCE_TICKS = 5;
 // ============================================================================
 bool homing = false;
 bool holding = false;          // true once an idle hold target has been captured (see update())
+double hold_target = 0;        // degrees — captured position when idle hold engages
 bool placing_contact = false;  // true right after a lowering move stopped on contact (see touched_down())
 bool at_ceiling = false;       // true right after a raising move stopped on contact (see at_ceiling_now())
 int contact_high_ticks = 0;    // consecutive ticks current has read high while lowering
@@ -249,21 +260,26 @@ void update(int stick) {
     return;
   }
 
-  // Idle hold: actively servos against gravity instead of just relying on
-  // brake_mode HOLD (still set in initialize(), but on its own it wasn't
-  // enough — confirmed 2026-09-25, the single motor driving the whole DR4B
-  // through the 1:6 reduction sags out of brake-hold alone). Captures
-  // wherever the lift was the instant the stick let go as the target, then
-  // uses the rotation sensor to correct back to it if it drifts — a real
-  // closed loop, not a blind constant push. Re-captured fresh every time
-  // (holding flips false in the stick branch above) so it always holds
-  // "wherever you left it," not some stale height from earlier.
+  // Idle hold: mostly the motor's own brake_mode HOLD (still set in
+  // initialize()), with an active PID correction only for slow gravity sag
+  // brake-hold alone couldn't stop (confirmed 2026-09-25, one motor
+  // driving the whole DR4B through the 1:6 reduction sags out of it).
+  // Deliberately NOT running the PID continuously — see HOLD_TOLERANCE_DEG
+  // above for why that made the lift easy to backdrive by hand. Captures
+  // wherever the lift was the instant the stick let go as the target
+  // (re-captured fresh every time — holding flips false in the stick
+  // branch above — so it always holds "wherever you left it").
   if (!holding) {
     holding = true;
-    height_pid.target_set(position());
+    hold_target = position();
+    height_pid.target_set(hold_target);
   }
-  double out = height_pid.compute(position()) + GRAVITY_HOLD;
-  motor.move(out);
+  if (std::fabs(position() - hold_target) > HOLD_TOLERANCE_DEG) {
+    double out = height_pid.compute(position()) + GRAVITY_HOLD;
+    motor.move(out);
+  } else {
+    motor.move(0);
+  }
 }
 
 }  // namespace lift
