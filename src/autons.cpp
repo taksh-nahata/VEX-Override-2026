@@ -225,3 +225,88 @@ void calibrate_spin() {
                        "CALIB spin: rot=%.1fdeg raw_lateral=%.2fin off_est~%.3fin  odom_x=%.2f odom_y=%.2f",
                        actual_rotation_deg, lateral_in, offset_estimate, chassis.odom_x_get(), chassis.odom_y_get());
 }
+
+// ============================================================================
+// PATH.JERRYIO IMPORT (WIP -- the team is still building this path)
+//
+// PATH.JERRYIO exports in centimeters, origin at the CENTER of the field.
+// This chassis (and everywhere else in this project) uses inches, and we
+// wanted the origin at the bottom-right corner instead -- the corner the
+// team's starting near for this auto. Converting isn't just a shift:
+//   new_x = 72 - (raw_x_cm / 2.54)   -- mirrored, not just shifted
+//   new_y = (raw_y_cm / 2.54) + 72
+// The mirror on X (not Y) is deliberate: in PATH.JERRYIO's exported
+// coordinates, the bottom-right corner sits at the far +X, so a plain
+// shift alone would leave "moving away from your own corner, into the
+// field" reading as NEGATIVE X, which is backwards from how every other
+// distance in this project already works (increasing = further from
+// where you started). Mirroring X (and only X) fixes that without
+// touching Y, since the bottom-right corner is already at the most
+// negative Y, so a plain shift alone already makes "into the field"
+// positive for Y.
+//
+// Headings needed their own transform, not just carried over -- mirroring
+// only one axis flips left/right-facing directions but leaves up/down
+// alone. Checked PATH.JERRYIO's own angle convention against the actual
+// direction of travel between consecutive points in the raw file before
+// trusting a formula (0 deg = facing the same way as +Y before the
+// mirror, measured clockwise -- confirmed this matches by checking that
+// the heading at the very first point lines up with which way the path
+// actually heads from point 1 to point 2, and again partway through).
+// The matching transform for that convention is: new_heading = (360 -
+// raw_heading) % 360.
+//
+// TODO(verify): the position/heading transform above is checked against
+// the raw file's own geometry, not against the real field yet -- run this
+// once the path is finished and confirm the first few feet actually go
+// where the team's PATH.JERRYIO picture shows before trusting the rest.
+//
+// TODO(verify): every point below is ez::fwd right now. The team asked
+// separately how to make part of this path drive backwards instead of
+// turning -- that's a per-point drive_direction (ez::fwd vs ez::rev, see
+// the odom struct in EZ-Template/util.hpp), and needs the team to say
+// which stretches of the finished path should be reverse, not something
+// we can guess from the exported file alone.
+//
+// TODO(verify): speed values below (120, from the file) are carried over
+// as-is -- haven't confirmed PATH.JERRYIO's speed units actually match
+// what EZ-Template's max_xy_speed expects here.
+void auton_jerryio_test() {
+  chassis.pid_odom_pp_set(
+      std::vector<odom>{
+          {{9.156, 35.064, 90.0}, ez::fwd, 120},
+          {{9.942, 35.021}, ez::fwd, 120},
+          {{10.707, 34.843}, ez::fwd, 120},
+          {{11.421, 34.513}, ez::fwd, 120},
+          {{12.067, 34.065}, ez::fwd, 120},
+          {{12.665, 33.552}, ez::fwd, 120},
+          {{13.247, 33.022}, ez::fwd, 120},
+          {{13.839, 32.502}, ez::fwd, 120},
+          {{14.455, 32.013}, ez::fwd, 120},
+          {{15.101, 31.563}, ez::fwd, 120},
+          {{15.775, 31.156}, ez::fwd, 120},
+          {{16.475, 30.794}, ez::fwd, 120},
+          {{17.194, 30.475}, ez::fwd, 120},
+          {{17.930, 30.195}, ez::fwd, 120},
+          {{18.186, 30.315, 130.0}, ez::fwd, 120},
+          {{17.740, 30.963}, ez::fwd, 120},
+          {{17.294, 31.612}, ez::fwd, 120},
+          {{16.848, 32.261}, ez::fwd, 120},
+          {{16.402, 32.910}, ez::fwd, 120},
+          {{15.933, 33.543, 330.0}, ez::fwd, 120},
+          {{15.490, 34.193}, ez::fwd, 120},
+          {{15.113, 34.884}, ez::fwd, 120},
+          {{14.852, 35.625}, ez::fwd, 120},
+          {{14.794, 36.407}, ez::fwd, 120},
+          {{15.029, 37.153}, ez::fwd, 120},
+          {{15.501, 37.780}, ez::fwd, 120},
+          {{16.090, 38.302}, ez::fwd, 120},
+          {{16.723, 38.769}, ez::fwd, 120},
+          {{17.368, 39.222}, ez::fwd, 120},
+          {{18.002, 39.688}, ez::fwd, 120},
+          {{18.598, 40.186, 40.0}, ez::fwd, 120},
+          {{18.598, 40.186, 40.0}, ez::fwd, 0},
+      },
+      true);
+  chassis.pid_wait();
+}

@@ -16,3 +16,7 @@ void tune_test();
 // main.cpp. Not real autons either — never wired to the selector.
 void calibrate_straight();
 void calibrate_spin();
+
+// WIP PATH.JERRYIO import -- see autons.cpp for the coordinate transform
+// and what's still unconfirmed. Not wired to a button or the selector yet.
+void auton_jerryio_test();
