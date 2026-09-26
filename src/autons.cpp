@@ -256,10 +256,24 @@ void calibrate_spin() {
 // The matching transform for that convention is: new_heading = (360 -
 // raw_heading) % 360.
 //
-// TODO(verify): the position/heading transform above is checked against
-// the raw file's own geometry, not against the real field yet -- run this
-// once the path is finished and confirm the first few feet actually go
-// where the team's PATH.JERRYIO picture shows before trusting the rest.
+// CORRECTED 2026-09-27 -- the first version of this transform sent the
+// robot the wrong way on headings. Root cause: PATH.JERRYIO's angle
+// convention (confirmed directly in its own UI: 0deg=+Y, 90deg=+X,
+// increasing CLOCKWISE) and EZ-Template's internal convention (confirmed
+// by reading EZ-Template's own tracking.cpp source: 0deg=+Y also, but
+// increasing COUNTERCLOCKWISE) rotate opposite ways around the same
+// reference direction. Separately, mirroring the X axis (needed for the
+// corner-origin move above) ALSO reverses which way angles wind, for the
+// same reason a mirror image swaps clockwise and counterclockwise. Two
+// reversals cancel out -- so the heading EZ-Template actually needs is
+// PATH.JERRYIO's raw, un-mirrored heading value, unchanged. The position
+// (x/y) transform is a separate thing and isn't affected by any of this;
+// it's still the shift + X-mirror described above.
+//
+// TODO(verify): still only checked against the raw file's own geometry
+// and the two conventions' own documentation/source, not against the
+// real field yet -- run this once the path is finished and confirm the
+// first few feet actually go where the team's PATH.JERRYIO picture shows.
 //
 // TODO(verify): speed values below are hand-adjusted from the file's flat
 // 120 everywhere -- slower approaching the pickup (precision matters more
@@ -289,12 +303,12 @@ void auton_jerryio_test() {
   // needs to know where it's actually starting from. Only correct if the
   // robot is really placed at this path's starting tile/orientation
   // before this runs (see main.cpp's LEFT binding).
-  chassis.odom_xyt_set(7.5, 35.064, 90);
+  chassis.odom_xyt_set(7.5, 32, 270);
 
   // Leg 1: start to the cup+pin.
   chassis.pid_odom_pp_set(
       std::vector<odom>{
-          {{7.5, 35.064, 90.0}, ez::fwd, 120},
+          {{7.5, 32, 270.0}, ez::fwd, 120},
           {{9.942, 35.021}, ez::fwd, 120},
           {{10.707, 34.843}, ez::fwd, 120},
           {{11.421, 34.513}, ez::fwd, 120},
@@ -344,12 +358,12 @@ void auton_jerryio_test() {
           {{16.475, 30.794}, ez::fwd, 120},
           {{17.194, 30.475}, ez::fwd, 90},
           {{17.930, 30.195}, ez::fwd, 70},
-          {{18.186, 30.315, 130.0}, ez::fwd, 60},
+          {{18.186, 30.315, 230.0}, ez::fwd, 60},
           {{17.740, 30.963}, ez::fwd, 70},
           {{17.294, 31.612}, ez::fwd, 120},
           {{16.848, 32.261}, ez::fwd, 120},
           {{16.402, 32.910}, ez::fwd, 120},
-          {{15.933, 33.543, 330.0}, ez::fwd, 120},
+          {{15.933, 33.543, 30.0}, ez::fwd, 120},
           {{15.490, 34.193}, ez::fwd, 120},
           {{15.113, 34.884}, ez::fwd, 120},
           {{14.852, 35.625}, ez::fwd, 120},
@@ -360,8 +374,8 @@ void auton_jerryio_test() {
           {{16.723, 38.769}, ez::fwd, 120},
           {{17.368, 39.222}, ez::fwd, 90},
           {{18.002, 39.688}, ez::fwd, 70},
-          {{18.598, 40.186, 40.0}, ez::fwd, 60},
-          {{18.598, 40.186, 40.0}, ez::fwd, 0},
+          {{18.598, 40.186, 320.0}, ez::fwd, 60},
+          {{18.598, 40.186, 320.0}, ez::fwd, 0},
       },
       true);
   chassis.pid_wait();
