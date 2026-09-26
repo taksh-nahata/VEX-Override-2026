@@ -17,15 +17,29 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 
 ## Project layout
 
-- `src/main.cpp` — chassis setup, driver control, initialization.
+- `src/main.cpp` — chassis setup, driver control, debug screen, anti-tip, match clock.
 - `src/subsystems/` — lift, claw, toggle spinner (one file each).
-- `src/autons.cpp` — PID tuning + autonomous routines.
+- `src/autons.cpp` — PID/slew constants, autonomous routines, PID tuner + calibration test moves.
+- `src/ui.cpp` — boot splash + on-screen auton selector (LVGL).
+- `src/sdlog.cpp` — background SD card logging (`/usd/log.csv`).
 - `include/globals.hpp` — every motor/sensor port and spin direction in one place.
+- `TODO.md` — plain-language status/what's-left, no coding background needed to read it.
+
+## Controls
+
+- **R1 / R2** — lift up / down.
+- **L1** — toggle claw open/closed.
+- **L2** (hold) — spin the toggle wheel toward the current target color; stops automatically on reaching it.
+- **UP** — swap the toggle target between red/blue. **Y** — set it to yellow. Shown on the controller screen.
+- **X** — toggle the drivetrain PID tuner on/off. While it's on: **Up/Down** picks the PID set, **Left/Right** adjusts the selected value, **B** runs a test drive+turn move.
+- **A** — run the drivetrain calibration test move (tape-measure the result and report it back). **LEFT** — run the odometry offset calibration spin (fully automatic). Both disabled while the tuner is on.
 
 ## Hardware status
 
 Ports are confirmed and in `globals.hpp`. Still open:
-- `DIR_ODOM_HORIZONTAL` — needs a push-the-robot-right bench check.
-- Wheel diameter / gear ratio in `main.cpp` — marked "pretty sure," worth double-checking.
 - All PID gains (`autons.cpp`, `lift.cpp`) and the toggle color sensor's hue thresholds (`toggle.cpp`) — need tuning against the real robot/toggles.
-- Anti-tip constants in `main.cpp` (tip angle, correction direction) — unverified, test carefully before relying on them.
+- Anti-tip constants in `main.cpp` (tip angle, max lift height, correction direction) — unverified, test carefully before relying on them.
+- `ODOM_HORIZONTAL_OFFSET` (`globals.hpp`) — run the LEFT-button calibration spin and report the result.
+- The lift must be powered on with it all the way down at true floor every time — `position()` zeros to wherever it physically is at boot, not a fixed reference.
+
+See `TODO.md` for the full current status and what's next.

@@ -2,50 +2,36 @@
 
 #include <cstdint>
 
-// DR4B lift: 1 motor, mounted on the second four-bar (rebuilt 2026-09-20
-// from a 2-motor dual-side design — see globals.hpp's PORT_LIFT comment).
+// DR4B lift: 1 motor on the second four-bar, through a 1:6 external
+// reduction. position() reads a rotation sensor mounted past that
+// reduction (true arm angle), not the motor's own encoder.
 //
-// Override only lets a robot carry 1 pin + 1 cup at a time (no accumulator
-// stacking), so the height needed each cycle depends on however tall the
-// goal's stack has grown so far, not a fixed preset. Manual proportional
-// control lines it up with whatever height that is; go_to_floor() is a
-// macro for the one height that IS fixed and used every cycle (intake).
-//
-// All tunable constants live in lift.cpp, tagged TODO(tune) — grep there
-// for the full list of what still needs a real-world number.
+// Tunable constants live in lift.cpp, tagged TODO(tune)/TODO(verify).
 namespace lift {
 
 void initialize();
 
-// Current height (motor degrees).
+// Height, in degrees, from the rotation sensor.
 double position();
 
-// Drives the lift directly from R1 (+127) / R2 (-127) / neither (0). Call
-// every opcontrol loop, even when neither button is held.
+// Drives the lift from R1 (+127) / R2 (-127) / neither (0). Call every
+// opcontrol loop, even when neither button is held.
 void update(int stick);
 
-// Cancels manual control and PIDs back to the floor/intake height. Not
-// currently wired to any button.
+// Cancels manual control and PIDs down to position 0. Not currently wired
+// to a button.
 void go_to_floor();
 
-// For tuning CONTACT_CURRENT_MA/CEILING_CURRENT_MA (lift.cpp) — print this
-// while manually lowering onto a real stack, or raising to the mechanical
-// top, to see normal load vs. the spike on contact.
+// Motor current draw (mA) — for tuning CONTACT_CURRENT_MA/CEILING_CURRENT_MA
+// (lift.cpp) against the debug screen.
 std::int32_t current_ma();
 
-// True right after update() stops a downward move due to a current spike
-// (a pin landing on something). Independent of the floor limit below —
-// one's current-based, the other's position-based.
+// True for the tick(s) right after update() stops a downward move because
+// current spiked — hit something solid (a stack, or the true floor).
 bool touched_down();
 
-// True right after update() stops an upward move due to a current spike
-// (hit the mechanical ceiling). Fully automatic, no calibration needed —
-// see lift.cpp for why the ceiling doesn't need the floor's manual toggle.
+// True for the tick(s) right after update() stops an upward move because
+// current spiked — hit the mechanical ceiling.
 bool at_ceiling_now();
-
-// Toggles the floor limit on/off (see main.cpp for the button). Re-enabling
-// captures wherever the lift currently is as the new floor reference.
-void toggle_floor_limit();
-bool floor_limit_on();
 
 }  // namespace lift
