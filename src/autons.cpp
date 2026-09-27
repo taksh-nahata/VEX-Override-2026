@@ -1,12 +1,7 @@
 #include "main.h"
 #include <cmath>
 
-// ============================================================================
-// PID / SLEW CONSTANTS
-// TODO(tune): these are last season's numbers for a different robot, not
-// anything we've measured on this one -- placeholders so the drive
-// actually moves, not values to trust yet.
-// ============================================================================
+// TODO(tune): last season's numbers for a different robot, not measured on this one yet.
 void default_constants() {
   chassis.pid_drive_constants_set(20.0, 0.0, 100.0);
   chassis.pid_heading_constants_set(11.0, 0.0, 20.0);
@@ -25,33 +20,10 @@ void default_constants() {
   chassis.pid_drive_chain_constant_set(3_in);
 }
 
-// ============================================================================
-// AUTONS
-// auton_button_1() is the current real plan: grab the preload, drop it in
-// a cup, pick up the whole cup, and place it on a goal. auton_button_2()
-// is the earlier Loader-cycle idea, kept as a fallback -- see its own
-// comment below. Skills is its own separate game mode with its own
-// timing, not just a longer version of either of these, so it's staying a
-// stub until we're actually ready to plan that.
-//
-// Both autons here are plain sequential drive/turn/claw/lift calls, not
-// PATH.JERRYIO pure pursuit -- we tried that first (see git history
-// 2026-09-26/27) and it turned into three rounds of a heading-convention
-// bug (drove the wrong way, then spun in place, then lost control
-// entirely) before we called it and came back to the simpler, better
-// understood approach this whole project already uses everywhere else.
-// Every distance/angle below is a placeholder pending real measurement,
-// same as always -- the win here is that a wrong PLACEHOLDER just needs
-// its number corrected, not a whole coordinate system re-derived.
-// ============================================================================
-void auton_skills() {}
+void auton_skills() {}  // TODO(missing): skills has its own timing, not planned yet
 
-// Blocks until the current lift preset move actually settles. The lift
-// only moves while something calls lift::update() -- it's not on its own
-// background task the way the chassis's drive PID is -- so auton has to
-// keep feeding it ticks itself while it waits, the same job opcontrol()'s
-// loop normally does. The timeout is a safety net so one preset that never
-// quite settles can't eat the whole 15-second auto by itself.
+// Keeps calling lift::update(0) until a go_to_pin_1/2/3()/go_to_cup_drop() move settles -- the
+// lift only actually moves while something calls update(), unlike the chassis's own PID.
 void lift_wait(std::uint32_t timeout_ms = 1000) {
   std::uint32_t start = pros::millis();
   while (lift::is_homing() && pros::millis() - start < timeout_ms) {
@@ -60,136 +32,81 @@ void lift_wait(std::uint32_t timeout_ms = 1000) {
   }
 }
 
-// ============================================================================
-// AUTON: BUTTON 1 -- preload into a cup, grab the cup, place it on a goal.
-//
-// TODO(measure): DRIVE_TO_CUP_IN and DRIVE_CUP_TO_GOAL_IN are rough
-// straight-line guesses (loosely paced off the abandoned PATH.JERRYIO
-// drawing, not measured on the real field) -- pace these out for real
-// before trusting them. TURN_AFTER_PICKUP_DEG is 180 because that's the
-// team's actual plan (back off, spin around, keep going), not derived
-// from anything -- if the goal doesn't end up directly ahead after that
-// turn, add a second small pid_turn_set() after it rather than trying to
-// force this one number to do both jobs.
-// TODO(verify): does dropping the pin into the cup and then grabbing the
-// cup really work as a plain open-then-close on the same claw? First
-// guess, not confirmed against the real mechanism.
-constexpr double DRIVE_TO_CUP_IN = 7;
-constexpr double REVERSE_AFTER_PICKUP_IN = 6;
-constexpr double TURN_AFTER_PICKUP_DEG = 180;
-constexpr double DRIVE_CUP_TO_GOAL_IN = 9;
-
+// AUTON: BUTTON 1 -- "Cup+Goal", the current main plan. All distances/angles below are
+// placeholders -- pace them out for real. TODO(verify): drop-then-grab assumed to be a plain
+// open-then-close on the same claw, not confirmed against the real mechanism.
 void auton_button_1() {
-  // Preload is already secured in the claw at the start of a match --
-  // raise it to cup height and drive over.
-  claw::close();
+  claw::close();          // preload is already in the claw at match start
   lift::go_to_cup_drop();
   lift_wait();
-  chassis.pid_drive_set(DRIVE_TO_CUP_IN, 70, true);
+  chassis.pid_drive_set(7, 70, true);  // drive to the cup
   chassis.pid_wait();
 
-  // Drop the pin into the cup, then grab the whole cup.
-  claw::open();
+  claw::open();   // drop the pin into the cup
   pros::delay(300);
-  claw::close();
+  claw::close();  // grab the whole cup
   pros::delay(300);
 
-  // Back off so the turn doesn't drag the cup, then spin around.
-  chassis.pid_drive_set(-REVERSE_AFTER_PICKUP_IN, 60, true);
+  chassis.pid_drive_set(-6, 60, true);  // back off so the turn doesn't drag the cup
   chassis.pid_wait();
-  chassis.pid_turn_set(TURN_AFTER_PICKUP_DEG, 90, true);
+  chassis.pid_turn_set(180, 90, true);  // spin around
   chassis.pid_wait();
 
-  // Drive to the goal, raise to placing height, place.
-  chassis.pid_drive_set(DRIVE_CUP_TO_GOAL_IN, 70, true);
+  chassis.pid_drive_set(9, 70, true);  // drive to the goal
   chassis.pid_wait();
   lift::go_to_pin_1();  // TODO(verify): placing a cup may want its own height, not this one
   lift_wait();
-  claw::open();
+  claw::open();  // place it
 }
 
-// ============================================================================
-// AUTON: BUTTON 2 -- the earlier plan, kept as a fallback: scores the
-// preload plus 2 Loader cycles for 3 pins total. Loader over picking pins
-// up off the open field on purpose: with no intake, every grab needs
-// precise alignment, and the Loader sits in the same fixed spot every
-// match, so it's something we can actually aim at reliably without vision.
-// Chasing the full 7-pin Autonomous Win Point isn't realistic without an
-// intake in 15 seconds -- this is aimed at the much easier 12-point auto
-// bonus (just outscoring the other alliance's auto) instead.
-//
-// TODO(measure): every DRIVE_*/TURN_* constant below is a placeholder.
-// Pace out (or measure) the real distances/angles from the actual starting
-// tile to the goal and to the Loader and fill these in. TODO(verify): does
-// grabbing from the Loader need the lift at a specific height, or is floor
-// height fine? If it needs its own height, that's another preset the same
-// way go_to_pin_1/2/3()/go_to_cup_drop() work.
-//
-// TODO(tune): 15 seconds is tight for 3 full Loader cycles once realistic
-// PID move times are accounted for, especially with Drive/Turn PID still
-// untuned -- time this for real once the distances below are filled in,
-// and don't be surprised if it needs cutting back to 2 pins (preload +
-// 1 cycle) to actually fit.
-constexpr double DRIVE_TO_GOAL_IN = 12;
-constexpr double TURN_TO_LOADER_DEG = 90;
-constexpr double DRIVE_TO_LOADER_IN = 12;
-constexpr double TURN_TO_GOAL_DEG = -90;
-constexpr int AUTON_DRIVE_SPEED = 90;
-constexpr int AUTON_TURN_SPEED = 90;
-
+// AUTON: BUTTON 2 -- "Loader x2", the earlier plan, kept as a fallback. Scores the preload plus
+// 2 Loader cycles for 3 pins -- going for the 12-point auto bonus, not the 7-pin Autonomous Win
+// Point (not realistic without an intake in 15 seconds). All distances/angles are placeholders.
+// TODO(verify): does the Loader need the lift at a specific height, or is floor height fine?
 void auton_button_2() {
-  // Preload starts secured in the claw already -- first move is straight
-  // to scoring it, no grab needed.
   lift::go_to_pin_1();  // empty goal height
   lift_wait();
-  chassis.pid_drive_set(DRIVE_TO_GOAL_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_drive_set(12, 90, true);  // drive to the goal
   chassis.pid_wait();
-  claw::open();
-  pros::delay(200);  // let the pin actually clear the claw before we move again
-
-  // Loader cycle #1 -> pin #2, stacked on top of the preload.
-  chassis.pid_turn_set(TURN_TO_LOADER_DEG, AUTON_TURN_SPEED, true);
-  chassis.pid_wait();
-  chassis.pid_drive_set(DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
-  chassis.pid_wait();
-  claw::close();  // grab from the Loader
+  claw::open();  // drop the preload
   pros::delay(200);
-  chassis.pid_drive_set(-DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
+
+  chassis.pid_turn_set(90, 90, true);  // turn to the Loader
   chassis.pid_wait();
-  chassis.pid_turn_set(TURN_TO_GOAL_DEG, AUTON_TURN_SPEED, true);
+  chassis.pid_drive_set(12, 90, true);  // drive to the Loader
+  chassis.pid_wait();
+  claw::close();  // grab pin #2
+  pros::delay(200);
+  chassis.pid_drive_set(-12, 90, true);  // back out of the Loader
+  chassis.pid_wait();
+  chassis.pid_turn_set(-90, 90, true);  // turn back to the goal
   chassis.pid_wait();
   lift::go_to_pin_2();  // goal now has 1 pin on it
   lift_wait();
-  chassis.pid_drive_set(DRIVE_TO_GOAL_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_drive_set(12, 90, true);  // drive to the goal
   chassis.pid_wait();
-  claw::open();
+  claw::open();  // stack pin #2
   pros::delay(200);
 
-  // Loader cycle #2 -> pin #3.
-  chassis.pid_turn_set(TURN_TO_LOADER_DEG, AUTON_TURN_SPEED, true);
+  chassis.pid_turn_set(90, 90, true);  // turn to the Loader
   chassis.pid_wait();
-  chassis.pid_drive_set(DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_drive_set(12, 90, true);  // drive to the Loader
   chassis.pid_wait();
-  claw::close();
+  claw::close();  // grab pin #3
   pros::delay(200);
-  chassis.pid_drive_set(-DRIVE_TO_LOADER_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_drive_set(-12, 90, true);  // back out of the Loader
   chassis.pid_wait();
-  chassis.pid_turn_set(TURN_TO_GOAL_DEG, AUTON_TURN_SPEED, true);
+  chassis.pid_turn_set(-90, 90, true);  // turn back to the goal
   chassis.pid_wait();
   lift::go_to_pin_3();  // goal now has 2 pins on it
   lift_wait();
-  chassis.pid_drive_set(DRIVE_TO_GOAL_IN, AUTON_DRIVE_SPEED, true);
+  chassis.pid_drive_set(12, 90, true);  // drive to the goal
   chassis.pid_wait();
-  claw::open();
+  claw::open();  // stack pin #3
 }
 
-// ============================================================================
-// PID TUNER TEST MOVE
-// Something to actually watch happen while the tuner (main.cpp's X/B) is
-// on: drives 24in to exercise Drive PID, then turns 90deg to exercise
-// Turn PID, so we're not just staring at numbers change with no move to
-// judge them against.
-// ============================================================================
+// Runs while the drivetrain PID tuner (main.cpp's X/B) is on, so there's an actual move to judge
+// the live values against: drives 24in, then turns 90deg.
 void tune_test() {
   chassis.pid_drive_set(24_in, 90, true);
   chassis.pid_wait();
@@ -197,29 +114,17 @@ void tune_test() {
   chassis.pid_wait();
 }
 
-// ============================================================================
-// DRIVETRAIN CALIBRATION
-// Two test moves for the drivetrain numbers we still don't actually know:
-// the gear ratio in main.cpp's chassis constructor, and
-// ODOM_HORIZONTAL_OFFSET in globals.hpp. Bound to A/LEFT in main.cpp;
-// results print to brain line 5 and controller line 2, and every tick
-// also lands in /usd/log.csv (sdlog.cpp) in case we need to look closer
-// afterward.
-// ============================================================================
+// DRIVETRAIN CALIBRATION -- for the numbers we still don't know: the gear ratio in main.cpp's
+// chassis constructor, and ODOM_HORIZONTAL_OFFSET in globals.hpp. Not bound to a button right
+// now (freed up for the lift presets). Results print to brain line 5 + controller line 2, and
+// every tick also lands in /usd/log.csv.
 
-// We drive in raw encoder degrees here, not inches -- inches would
-// already assume the gear ratio we're trying to measure, which would
-// make the whole test circular. 3600 is 10 motor shaft rotations, enough
-// distance to tape-measure precisely.
-constexpr int CALIBRATE_DRIVE_DEGREES = 3600;
-constexpr int CALIBRATE_DRIVE_SPEED = 60;  // open-loop, not a PID move -- we're not trusting distance yet
+constexpr int CALIBRATE_DRIVE_DEGREES = 3600;  // 10 motor shaft rotations, raw not inches (inches
+                                                // would assume the gear ratio being measured)
+constexpr int CALIBRATE_DRIVE_SPEED = 60;      // open-loop, not a PID move
 
-// Tape-measure the real distance driven (call it M) and tell us the
-// number. From there:
+// Tape-measure the real distance driven (M) and report it:
 //   new gear ratio = old gear ratio * (M / drive_in)
-// If tracker_in is also off from M by a lot more than drive_in is, that
-// points at ODOM_HORIZONTAL_OFFSET or slop in the tracker wheel's mount
-// instead of the gear ratio.
 void calibrate_straight() {
   chassis.drive_sensor_reset();
   horizontal_tracker.reset();
@@ -238,30 +143,18 @@ void calibrate_straight() {
                        drive_in, tracker_in);
 }
 
-// This one we figured out doesn't need a human measurement at all: a pure
-// in-place spin has zero real sideways travel, so any lateral inches the
-// tracker reports during one can only be explained by
-// ODOM_HORIZONTAL_OFFSET being wrong. The IMU's own rotation count gives
-// us ground truth for how far we actually spun, so we can solve for the
-// offset ourselves. More rotations averages out more of the noise.
+// A pure in-place spin has zero real sideways travel, so lateral drift the tracker picks up
+// during one is entirely ODOM_HORIZONTAL_OFFSET's fault -- no tape measure needed.
 constexpr double CALIBRATE_SPIN_ROTATIONS = 8.0;
-// Dropped from 70 to 35 (2026-09-26) as a one-off test -- the robot was
-// landing a little off-angle after a spin, and we want to see whether
-// that's the IMU's gyro getting less accurate at higher spin speeds
-// (would improve at 35) or just Turn PID's exit tolerance being loose
-// (wouldn't change with speed, and is a separate tuning job anyway). Put
-// this back to 70 once that's answered.
-constexpr int CALIBRATE_SPIN_SPEED = 35;
+constexpr int CALIBRATE_SPIN_SPEED = 35;  // slower than a real turn -- see git history 2026-09-26
 
 void calibrate_spin() {
   chassis.drive_imu_reset();
-  chassis.odom_xyt_set(0, 0, 0);  // clean slate so odom_x/odom_y below start at true 0
+  chassis.odom_xyt_set(0, 0, 0);
   horizontal_tracker.reset();
 
-  // ez::raw asks for the literal target angle instead of the shortest
-  // path there -- with "shortest path" behavior, 8 full rotations would
-  // just look like 0 and the robot wouldn't move at all.
-  chassis.pid_turn_set(CALIBRATE_SPIN_ROTATIONS * 360.0, CALIBRATE_SPIN_SPEED, ez::raw);
+  chassis.pid_turn_set(CALIBRATE_SPIN_ROTATIONS * 360.0, CALIBRATE_SPIN_SPEED, ez::raw);  // ez::raw
+                                                                                           // = literal target, not shortest path
   chassis.pid_wait();
 
   double actual_rotation_deg = chassis.imu.get_rotation();
@@ -269,16 +162,9 @@ void calibrate_spin() {
   double radians = actual_rotation_deg * (M_PI / 180.0);
   double offset_estimate = radians != 0 ? lateral_in / radians : 0;
 
-  // Two different numbers here, for two different moments: offset_estimate
-  // (from lateral_in, the raw wheel reading) is what we solved
-  // ODOM_HORIZONTAL_OFFSET from the first time this test ran. odom_x/odom_y
-  // are the chassis's own corrected position estimate, which is what
-  // actually uses that constant -- run this test again after applying a
-  // fix and check THESE stay near 0, not lateral_in again (that number
-  // doesn't change just because we updated the constant).
+  // odom_x/odom_y (not lateral_in again) are what actually reflect a fix to the offset constant
   master.print(0, 2, "odX%.2f odY%.2f", chassis.odom_x_get(), chassis.odom_y_get());
   pros::screen::print(TEXT_MEDIUM, 5,
                        "CALIB spin: rot=%.1fdeg raw_lateral=%.2fin off_est~%.3fin  odom_x=%.2f odom_y=%.2f",
                        actual_rotation_deg, lateral_in, offset_estimate, chassis.odom_x_get(), chassis.odom_y_get());
 }
-
