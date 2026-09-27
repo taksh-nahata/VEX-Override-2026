@@ -54,7 +54,7 @@ void auton_button_1() {
 
   chassis.pid_drive_set(9, 70, true);  // drive to the goal
   chassis.pid_wait();
-  lift::go_to_pin_1();  // TODO(verify): placing a cup may want its own height, not this one
+  lift::go_to_cup_on_goal();  // it's the whole cup+pin unit going down, not a bare pin
   lift_wait();
   claw::open();  // place it
 }

@@ -85,6 +85,13 @@ constexpr double PIN_LAYER_MM = 165.0;
 // number, just an engineering guess.
 constexpr double PLACE_CLEARANCE_MM = 15.0;
 
+// Measured on the bench 2026-09-27: a Pin sitting inside a Cup is about
+// 10in (254mm) tall as one unit -- taller than a bare Pin (165mm) since
+// the Cup sits around it. auton_button_1() places this whole nested
+// unit onto the goal, not a bare Pin, so it gets its own clearance
+// number instead of reusing PIN_LAYER_MM.
+constexpr double CUP_WITH_PIN_MM = 254.0;
+
 // TODO(tune): how far the lift can sag from where it was left before the
 // PID steps in to correct it. We added this after testing showed the
 // first version of idle hold ran the PID every tick and made the lift
@@ -182,25 +189,23 @@ void go_to_floor() {
 }
 
 // Reads how far the claw currently is from whatever's under it (true
-// floor, or the top of an existing stack) and goes to `layer` pins' worth
-// of clearance above THAT -- so the same button works whether the goal's
-// empty or already has pins on it, instead of trusting a fixed absolute
-// height every time. Falls back to the old fixed guess if the sensor
-// can't see anything (out of range) rather than driving to a nonsense
-// target.
-void go_to_layer(int layer, double fallback_deg) {
+// floor, or the top of an existing stack) and goes to `target_clearance_mm`
+// above THAT -- so the same button works whether the goal's empty or
+// already has pins on it, instead of trusting a fixed absolute height
+// every time. Falls back to the old fixed guess if the sensor can't see
+// anything (out of range) rather than driving to a nonsense target.
+void go_to_clearance(double target_clearance_mm, double fallback_deg) {
   std::int32_t sensed_mm = claw_distance_mm();
   if (sensed_mm <= 0 || sensed_mm >= 9999) {
     go_to_height(fallback_deg);
     return;
   }
-  double target_clearance_mm = layer * PIN_LAYER_MM + PLACE_CLEARANCE_MM;
   double additional_rise_mm = target_clearance_mm - sensed_mm;
   go_to_height(position() + additional_rise_mm * LIFT_DEG_PER_MM);
 }
 
 void go_to_pin_1() {
-  go_to_layer(1, PIN_1_HEIGHT_DEG);
+  go_to_clearance(1 * PIN_LAYER_MM + PLACE_CLEARANCE_MM, PIN_1_HEIGHT_DEG);
 }
 
 void go_to_cup_drop() {
@@ -208,11 +213,15 @@ void go_to_cup_drop() {
 }
 
 void go_to_pin_2() {
-  go_to_layer(2, PIN_2_HEIGHT_DEG);
+  go_to_clearance(2 * PIN_LAYER_MM + PLACE_CLEARANCE_MM, PIN_2_HEIGHT_DEG);
 }
 
 void go_to_pin_3() {
-  go_to_layer(3, PIN_3_HEIGHT_DEG);
+  go_to_clearance(3 * PIN_LAYER_MM + PLACE_CLEARANCE_MM, PIN_3_HEIGHT_DEG);
+}
+
+void go_to_cup_on_goal() {
+  go_to_clearance(CUP_WITH_PIN_MM + PLACE_CLEARANCE_MM, PIN_1_HEIGHT_DEG);
 }
 
 void update(int stick) {

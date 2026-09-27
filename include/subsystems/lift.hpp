@@ -40,8 +40,13 @@ void go_to_pin_3();
 
 // A shorter lift than any pin preset -- just enough to clear the ground
 // and hold a pin at cup-opening height while driving to drop it in.
-// Used by the WIP jerryio auton (autons.cpp).
+// Used by auton_button_1() (autons.cpp).
 void go_to_cup_drop();
+
+// Places a whole nested Cup+Pin unit onto the goal -- taller than a bare
+// Pin, so it uses its own sensed clearance (CUP_WITH_PIN_MM, lift.cpp)
+// instead of go_to_pin_1()'s bare-pin one. Used by auton_button_1().
+void go_to_cup_on_goal();
 
 // True while a go_to_floor()/go_to_pin_1/2/3() move is still in progress.
 // The lift only actually moves while something calls update() -- unlike

@@ -250,7 +250,13 @@ void match_clock_update() {
 // DRIVER CONTROL
 // ----------------------------------------------------------------------------
 void opcontrol() {
-  ui::clear_screen();  // no-op if run_selected() already cleared it
+  // Used to unconditionally clear the selector screen here too, on the
+  // assumption that autonomous() always runs first and already did it --
+  // true in a real match (competition switch/field control), but not
+  // when bench-testing without one, where opcontrol() can start directly
+  // and this was wiping the selector before anyone got to press a
+  // button. Leaving the screen alone here costs nothing in a real match
+  // (already cleared by run_selected() by the time we get here).
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_COAST);
   match_clock_reset();
 
@@ -261,6 +267,16 @@ void opcontrol() {
     anti_tip_apply();
     chassis.opcontrol_arcade_standard(ez::SPLIT);
     anti_tip_corrective_drive();  // overrides the drive command above if we're actively tipping
+
+    // BENCH TEST ONLY -- runs whatever's selected on the auton screen
+    // right now, without needing a competition switch/field control to
+    // trigger a real autonomous() call. Never do this in an actual match
+    // (autonomous() already runs the selection for you) -- DOWN was
+    // picked because it's not used for anything else.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
+      master.print(0, 2, "RUNNING AUTON");
+      ui::run_selected();
+    }
 
     // Claw
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) claw::toggle();
