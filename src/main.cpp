@@ -291,25 +291,6 @@ void opcontrol() {
       master.print(0, 2, "PIN 3");
     }
 
-    // TEMPORARY -- bench-testing the WIP PATH.JERRYIO path (autons.cpp)
-    // before it's finished. LEFT runs it right where the robot is
-    // currently sitting (auton_jerryio_test() resets odom to the path's
-    // start pose first) -- place the robot at the path's actual starting
-    // tile/orientation before pressing this, or it'll drive toward the
-    // wrong spot relative to wherever it really is. Remove this binding
-    // once the path is done and it's wired into the real auton instead.
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
-      auton_jerryio_test();
-    }
-
-    // TEMPORARY -- one clean turn-to-90 from a reset zero, no path or odom
-    // math involved, to settle which way this robot actually turns for a
-    // positive target (see turn_direction_test() in autons.cpp for why).
-    // Remove once that's answered.
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
-      turn_direction_test();
-    }
-
     // Lift: R1 raises, R2 lowers, that's the whole manual interface.
     if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
       lift::update(127);

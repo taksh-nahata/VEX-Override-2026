@@ -27,15 +27,24 @@ void default_constants() {
 
 // ============================================================================
 // AUTONS
-// auton_button_1() is our first real match auto (see below). Skills is its
-// own separate game mode with its own timing, not just a longer version of
-// this, so it's staying a stub until we're actually ready to plan that.
-// auton_button_2() is open for a second variant later -- e.g. the other
-// starting side, or a safer fallback if button_1 turns out too tight on
-// time once it's tested for real.
+// auton_button_1() is the current real plan: grab the preload, drop it in
+// a cup, pick up the whole cup, and place it on a goal. auton_button_2()
+// is the earlier Loader-cycle idea, kept as a fallback -- see its own
+// comment below. Skills is its own separate game mode with its own
+// timing, not just a longer version of either of these, so it's staying a
+// stub until we're actually ready to plan that.
+//
+// Both autons here are plain sequential drive/turn/claw/lift calls, not
+// PATH.JERRYIO pure pursuit -- we tried that first (see git history
+// 2026-09-26/27) and it turned into three rounds of a heading-convention
+// bug (drove the wrong way, then spun in place, then lost control
+// entirely) before we called it and came back to the simpler, better
+// understood approach this whole project already uses everywhere else.
+// Every distance/angle below is a placeholder pending real measurement,
+// same as always -- the win here is that a wrong PLACEHOLDER just needs
+// its number corrected, not a whole coordinate system re-derived.
 // ============================================================================
 void auton_skills() {}
-void auton_button_2() {}
 
 // Blocks until the current lift preset move actually settles. The lift
 // only moves while something calls lift::update() -- it's not on its own
@@ -52,9 +61,57 @@ void lift_wait(std::uint32_t timeout_ms = 1000) {
 }
 
 // ============================================================================
-// AUTON: BUTTON 1 -- first real auto, scores the preload plus 2 Loader
-// cycles for 3 pins total. We're going for the Loader instead of picking
-// pins up off the open field on purpose: with no intake, every grab needs
+// AUTON: BUTTON 1 -- preload into a cup, grab the cup, place it on a goal.
+//
+// TODO(measure): DRIVE_TO_CUP_IN and DRIVE_CUP_TO_GOAL_IN are rough
+// straight-line guesses (loosely paced off the abandoned PATH.JERRYIO
+// drawing, not measured on the real field) -- pace these out for real
+// before trusting them. TURN_AFTER_PICKUP_DEG is 180 because that's the
+// team's actual plan (back off, spin around, keep going), not derived
+// from anything -- if the goal doesn't end up directly ahead after that
+// turn, add a second small pid_turn_set() after it rather than trying to
+// force this one number to do both jobs.
+// TODO(verify): does dropping the pin into the cup and then grabbing the
+// cup really work as a plain open-then-close on the same claw? First
+// guess, not confirmed against the real mechanism.
+constexpr double DRIVE_TO_CUP_IN = 7;
+constexpr double REVERSE_AFTER_PICKUP_IN = 6;
+constexpr double TURN_AFTER_PICKUP_DEG = 180;
+constexpr double DRIVE_CUP_TO_GOAL_IN = 9;
+
+void auton_button_1() {
+  // Preload is already secured in the claw at the start of a match --
+  // raise it to cup height and drive over.
+  claw::close();
+  lift::go_to_cup_drop();
+  lift_wait();
+  chassis.pid_drive_set(DRIVE_TO_CUP_IN, 70, true);
+  chassis.pid_wait();
+
+  // Drop the pin into the cup, then grab the whole cup.
+  claw::open();
+  pros::delay(300);
+  claw::close();
+  pros::delay(300);
+
+  // Back off so the turn doesn't drag the cup, then spin around.
+  chassis.pid_drive_set(-REVERSE_AFTER_PICKUP_IN, 60, true);
+  chassis.pid_wait();
+  chassis.pid_turn_set(TURN_AFTER_PICKUP_DEG, 90, true);
+  chassis.pid_wait();
+
+  // Drive to the goal, raise to placing height, place.
+  chassis.pid_drive_set(DRIVE_CUP_TO_GOAL_IN, 70, true);
+  chassis.pid_wait();
+  lift::go_to_pin_1();  // TODO(verify): placing a cup may want its own height, not this one
+  lift_wait();
+  claw::open();
+}
+
+// ============================================================================
+// AUTON: BUTTON 2 -- the earlier plan, kept as a fallback: scores the
+// preload plus 2 Loader cycles for 3 pins total. Loader over picking pins
+// up off the open field on purpose: with no intake, every grab needs
 // precise alignment, and the Loader sits in the same fixed spot every
 // match, so it's something we can actually aim at reliably without vision.
 // Chasing the full 7-pin Autonomous Win Point isn't realistic without an
@@ -63,11 +120,10 @@ void lift_wait(std::uint32_t timeout_ms = 1000) {
 //
 // TODO(measure): every DRIVE_*/TURN_* constant below is a placeholder.
 // Pace out (or measure) the real distances/angles from the actual starting
-// tile to the goal and to the Loader and fill these in -- inventing
-// plausible-sounding numbers without measuring the real field would just
-// be wrong. TODO(verify): does grabbing from the Loader need the lift at a
-// specific height, or is floor height fine? If it needs its own height,
-// that's a 4th preset the same way go_to_pin_1/2/3() work.
+// tile to the goal and to the Loader and fill these in. TODO(verify): does
+// grabbing from the Loader need the lift at a specific height, or is floor
+// height fine? If it needs its own height, that's another preset the same
+// way go_to_pin_1/2/3()/go_to_cup_drop() work.
 //
 // TODO(tune): 15 seconds is tight for 3 full Loader cycles once realistic
 // PID move times are accounted for, especially with Drive/Turn PID still
@@ -81,7 +137,7 @@ constexpr double TURN_TO_GOAL_DEG = -90;
 constexpr int AUTON_DRIVE_SPEED = 90;
 constexpr int AUTON_TURN_SPEED = 90;
 
-void auton_button_1() {
+void auton_button_2() {
   // Preload starts secured in the claw already -- first move is straight
   // to scoring it, no grab needed.
   lift::go_to_pin_1();  // empty goal height
@@ -226,236 +282,3 @@ void calibrate_spin() {
                        actual_rotation_deg, lateral_in, offset_estimate, chassis.odom_x_get(), chassis.odom_y_get());
 }
 
-// ============================================================================
-// PATH.JERRYIO IMPORT (WIP -- the team is still building this path)
-//
-// PATH.JERRYIO exports in centimeters, origin at the CENTER of the field.
-// This chassis (and everywhere else in this project) uses inches, and we
-// wanted the origin at the bottom-right corner instead -- the corner the
-// team's starting near for this auto. Converting isn't just a shift:
-//   new_x = 72 - (raw_x_cm / 2.54)   -- mirrored, not just shifted
-//   new_y = (raw_y_cm / 2.54) + 72
-// The mirror on X (not Y) is deliberate: in PATH.JERRYIO's exported
-// coordinates, the bottom-right corner sits at the far +X, so a plain
-// shift alone would leave "moving away from your own corner, into the
-// field" reading as NEGATIVE X, which is backwards from how every other
-// distance in this project already works (increasing = further from
-// where you started). Mirroring X (and only X) fixes that without
-// touching Y, since the bottom-right corner is already at the most
-// negative Y, so a plain shift alone already makes "into the field"
-// positive for Y.
-//
-// Headings needed their own transform, not just carried over -- mirroring
-// only one axis flips left/right-facing directions but leaves up/down
-// alone. Checked PATH.JERRYIO's own angle convention against the actual
-// direction of travel between consecutive points in the raw file before
-// trusting a formula (0 deg = facing the same way as +Y before the
-// mirror, measured clockwise -- confirmed this matches by checking that
-// the heading at the very first point lines up with which way the path
-// actually heads from point 1 to point 2, and again partway through).
-// The matching transform for that convention is: new_heading = (360 -
-// raw_heading) % 360.
-//
-// CORRECTED 2026-09-27, twice. First pass sent the robot the wrong way.
-// Second pass ("the two conventions rotate opposite ways, and the X-mirror
-// reverses rotation too, so they cancel out -- use PATH.JERRYIO's raw
-// heading unconverted") was reasoned from documentation and EZ-Template's
-// source code, and turned out ALSO wrong -- the robot lost control and
-// spun in circles. Re-deriving this a third time from reading wasn't
-// worth trusting anymore, so it got settled with a real, isolated,
-// physical test instead: turn_direction_test() (bottom of this file),
-// which asks for a plain turn to a target of 90 from a freshly reset
-// zero, nothing else going on. Confirmed result: the robot turns
-// physically RIGHT for a positive target, matching PATH.JERRYIO's own
-// clockwise convention directly -- meaning EZ-Template needs NO
-// CW/CCW conversion at all here (whatever the source code seemed to say),
-// and the mirror transform is the ONLY correction needed:
-// new_heading = (360 - raw_heading) % 360. That's what's actually used
-// below now. The position (x/y) transform is separate and was never in
-// question; it's still the shift + X-mirror described above.
-//
-// TODO(verify): the position/heading transform is now checked against a
-// real physical test (turn_direction_test()), not just documentation --
-// more confidence than before, but still only one data point. Confirm the
-// first few feet of the real path go where the team's PATH.JERRYIO
-// picture shows before trusting the rest of it blind.
-//
-// TODO(verify): speed values below are hand-adjusted from the file's flat
-// 120 everywhere -- slower approaching the pickup (precision matters more
-// than time there) and through the two sharpest direction changes in the
-// path (checked by computing the actual turning angle between consecutive
-// points -- found real ~46/~99 deg swings around the pickup exit and a
-// ~140 deg swing near the very end, not just eyeballed). Still guesses,
-// not measured against what this drivetrain can actually track reliably
-// at speed -- retune once this runs for real.
-//
-// The whole thing is split into two pid_odom_pp_set() calls, not one,
-// because of what happens in between: drive to the cup+pin, drop the
-// preload pin into the cup, grab the whole cup, back off, spin 180, then
-// continue driving the rest of the path with the cup. Pure pursuit can't
-// pause mid-path for that on its own, so the path is cut exactly where
-// that stop needs to happen.
-//
-// The cut point is exactly where the team placed a control point in
-// PATH.JERRYIO at 6.295in of travel from the start -- confirmed by
-// walking cumulative distance through the raw file's own points rather
-// than guessing which one they meant: it lands, almost exactly, on point
-// index 8 below (cumulative distance comes out to 6.295in there, matching
-// to three decimal places).
-void auton_jerryio_test() {
-  // Tells the chassis "you are physically at the path's starting point
-  // right now" -- pure pursuit drives toward field coordinates, so it
-  // needs to know where it's actually starting from. Only correct if the
-  // robot is really placed at this path's starting tile/orientation
-  // before this runs (see main.cpp's LEFT binding).
-  // Heading here is PATH.JERRYIO's raw value MIRRORED, (360 - 270) % 360
-  // = 90 -- see turn_direction_test()'s result below for why this is 90
-  // and not the raw 270.
-  chassis.odom_xyt_set(7.5, 32, 90);
-
-  // Grab the starter pin right away, then bring the lift up just enough
-  // to hold it at cup height for the drive over -- TODO(tune):
-  // CUP_DROP_HEIGHT_DEG (lift.cpp) is a guess, never measured.
-  claw::close();
-  lift::go_to_cup_drop();
-  lift_wait();
-
-  // CORRECTED 2026-09-27, second bug found the same day -- the first
-  // fixed-heading version spun in circles and moved erratically. Cause:
-  // EZ-Template's pid_odom_pp_set() silently switches an individual point
-  // to BOOMERANG mode (a completely different algorithm, aimed at also
-  // arriving at an exact heading, not just passing through) whenever that
-  // point has a heading set at all -- confirmed in EZ-Template's own docs
-  // ("the path will switch to boomerang if angle is specified for that
-  // point"). We were carrying over PATH.JERRYIO's own bezier-segment-
-  // boundary headings onto several MIDDLE points in the path, which each
-  // silently kicked off a boomerang maneuver mid-route instead of a smooth
-  // pass-through -- that's almost certainly the spinning. Those headings
-  // meant something to PATH.JERRYIO's own curve math; they don't mean the
-  // same thing to a different path-following algorithm, so we stopped
-  // carrying them over. Every point below is now plain {x, y}, no
-  // heading, all the way through -- if a specific final facing matters
-  // for actually placing the cup, that's a separate pid_turn_set() after,
-  // the same pattern already used for the 180 below, not something baked
-  // into the pure pursuit call.
-  //
-  // Speeds also came down across the board (120 -> 60-80) -- 120 turned
-  // out to be close to this robot's actual max, and the drivetrain hasn't
-  // been tuned for pure pursuit at all yet. Get it tracking the path
-  // shape correctly and slowly first; speed it back up once that's
-  // actually confirmed, not before.
-
-  // Leg 1: start to the cup+pin.
-  chassis.pid_odom_pp_set(
-      std::vector<odom>{
-          {{7.5, 32}, ez::fwd, 70},
-          {{9.942, 35.021}, ez::fwd, 70},
-          {{10.707, 34.843}, ez::fwd, 70},
-          {{11.421, 34.513}, ez::fwd, 70},
-          {{12.067, 34.065}, ez::fwd, 60},
-          {{12.665, 33.552}, ez::fwd, 50},
-          {{13.247, 33.022}, ez::fwd, 40},
-          {{13.839, 32.502}, ez::fwd, 30},
-          {{14.455, 32.013}, ez::fwd, 20},  // pickup point -- 6.295in from start
-      },
-      true);
-  chassis.pid_wait();
-
-  // Preload pin should already be in the claw -- drop it into the cup,
-  // then grab the whole cup (now holding both).
-  // TODO(verify): guessing this is a plain open-then-close on the same
-  // claw -- confirm the actual sequence against the real mechanism, this
-  // isn't something we can know without seeing it work.
-  claw::open();
-  pros::delay(300);
-  claw::close();
-  pros::delay(300);
-
-  // Back off before turning -- TODO(measure): "a bit" is a placeholder,
-  // get the real distance from the team once this is tested.
-  constexpr double REVERSE_AFTER_PICKUP_IN = 6;
-  chassis.pid_drive_set(-REVERSE_AFTER_PICKUP_IN, 60, true);
-  chassis.pid_wait();
-
-  // Turn 180 off wherever leg 1 actually ended up facing, not a fixed
-  // absolute heading -- the pickup point has no explicit heading of its
-  // own in the path (it's a plain curve sample, not one of the deliberate
-  // heading break-points), so this is a relative turn from whatever
-  // heading pure pursuit left the robot at.
-  chassis.pid_turn_set(chassis.imu.get_heading() + 180, 90, true);
-  chassis.pid_wait();
-
-  // Leg 2: continue from the same point on to the goal, now carrying the
-  // cup+pin. TODO(verify): kept as ez::fwd since the team described this
-  // as "keep going forwards" after the 180 -- worth confirming on the
-  // bench that driving nose-first is actually correct here and the path
-  // wasn't drawn assuming the robot stays reversed through this leg.
-  //
-  // No headings on any point here either, including the old sharp-turn
-  // break-points -- same boomerang problem as leg 1. Kept those two
-  // stretches slow (40-50) since they're still the sharpest direction
-  // changes in the path, just via speed now, not a heading target.
-  chassis.pid_odom_pp_set(
-      std::vector<odom>{
-          {{14.455, 32.013}, ez::fwd, 20},
-          {{15.101, 31.563}, ez::fwd, 70},
-          {{15.775, 31.156}, ez::fwd, 70},
-          {{16.475, 30.794}, ez::fwd, 60},
-          {{17.194, 30.475}, ez::fwd, 50},
-          {{17.930, 30.195}, ez::fwd, 40},
-          {{18.186, 30.315}, ez::fwd, 40},
-          {{17.740, 30.963}, ez::fwd, 50},
-          {{17.294, 31.612}, ez::fwd, 70},
-          {{16.848, 32.261}, ez::fwd, 70},
-          {{16.402, 32.910}, ez::fwd, 70},
-          {{15.933, 33.543}, ez::fwd, 70},
-          {{15.490, 34.193}, ez::fwd, 70},
-          {{15.113, 34.884}, ez::fwd, 70},
-          {{14.852, 35.625}, ez::fwd, 70},
-          {{14.794, 36.407}, ez::fwd, 70},
-          {{15.029, 37.153}, ez::fwd, 70},
-          {{15.501, 37.780}, ez::fwd, 70},
-          {{16.090, 38.302}, ez::fwd, 70},
-          {{16.723, 38.769}, ez::fwd, 60},
-          {{17.368, 39.222}, ez::fwd, 50},
-          {{18.002, 39.688}, ez::fwd, 40},
-          {{18.598, 40.186}, ez::fwd, 30},
-          {{18.598, 40.186}, ez::fwd, 0},
-      },
-      true);
-  chassis.pid_wait();
-
-  // Final facing for placing onto the goal -- kept as its own explicit
-  // turn instead of a boomerang point in the path above, same reasoning
-  // as everywhere else in this function now. Mirrored, (360 - 320) % 360
-  // = 40, same reasoning as the start heading above -- confirmed with
-  // turn_direction_test() below, not re-derived from docs.
-  chassis.pid_turn_set(40, 90, true);
-  chassis.pid_wait();
-
-  claw::open();  // place the cup+pin onto the goal
-}
-
-// ============================================================================
-// TURN DIRECTION TEST
-// The jerryio path (above) turned out wrong twice in a row on the heading
-// side of things -- first driving the wrong way, then spinning in place
-// instead of translating. Re-deriving the angle convention from
-// documentation and source code a third time isn't worth trusting anymore;
-// this settles it with one simple, physical fact instead. Resets heading
-// to a clean 0, then asks for a turn to 90. Watch which way the robot
-// actually spins:
-//   - turns LEFT (counterclockwise, viewed from above) -> matches what
-//     EZ-Template's own source says it should do, the jerryio headings
-//     need no conversion, and the real bug is somewhere else (likely the
-//     lookahead distance vs. how short this path's legs are).
-//   - turns RIGHT (clockwise) -> the convention is backwards from what
-//     EZ-Template's docs/source say, headings need a manual sign flip
-//     (target = (360 - raw) % 360) wherever this project sets one.
-// ============================================================================
-void turn_direction_test() {
-  chassis.drive_imu_reset(0);
-  chassis.odom_xyt_set(0, 0, 0);
-  chassis.pid_turn_set(90, 60, true);
-  chassis.pid_wait();
-}

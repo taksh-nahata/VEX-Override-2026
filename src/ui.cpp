@@ -15,12 +15,11 @@ struct AutonOption {
   AutonFn fn;
 };
 
-// TODO(missing): auton_button_1/2 and auton_skills are all still empty
-// stubs (autons.cpp) — the selector works, there's just nothing to select
-// yet.
+// TODO(missing): auton_skills() (autons.cpp) is still an empty stub --
+// skills is its own game mode with different timing, not planned yet.
 AutonOption options[] = {
-    {"Button 1", auton_button_1},
-    {"Button 2", auton_button_2},
+    {"Cup+Goal", auton_button_1},
+    {"Loader x2", auton_button_2},
     {"Skills", auton_skills},
 };
 constexpr int OPTION_COUNT = sizeof(options) / sizeof(options[0]);

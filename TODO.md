@@ -1,6 +1,6 @@
 # What's left — Override 2026
 
-Plain-language status, updated 2026-09-26. "Code" items need a programmer; everything else is hardware/testing anyone on the team can do. Coders: every tunable number in the actual code is tagged `TODO(tune)`, `TODO(verify)`, `TODO(mechanical)`, or `TODO(missing)` — `grep -rn "TODO("` in `src/`/`include/` for the exact list this doc summarizes.
+Plain-language status, updated 2026-09-27. "Code" items need a programmer; everything else is hardware/testing anyone on the team can do. Coders: every tunable number in the actual code is tagged `TODO(tune)`, `TODO(verify)`, `TODO(mechanical)`, or `TODO(missing)` — `grep -rn "TODO("` in `src/`/`include/` for the exact list this doc summarizes.
 
 ## Done
 - All motor/sensor ports wired and confirmed correct — several moved around 2026-09-20/25 to make room for the new lift motor + rotation sensor (drivetrain right-back motor: 20 → 15; lift motor: 20 → 1; lift rotation sensor: 12 → 8; see "Lift rebuild" below).
@@ -50,14 +50,18 @@ This is brand new hardware, so:
 ## Not written yet
 - LQR for drivetrain control — flagged as worth investigating once we get to auton routines specifically (better fit for tracking precision than for anti-tip, which needs the physical bar more than fancier math).
 
-## First auto written (2026-09-26) — needs real field numbers before it'll work
-`auton_button_1()` (`autons.cpp`) scores the preload, then does 2 Loader cycles for a 3-pin auto total, going for the 12-point auto bonus (easy — just outscore the other alliance's auto) rather than the 7-pin Autonomous Win Point (not realistic without an intake in 15 seconds — every grab needs precise alignment a claw can't do quickly). Uses the Pin 1/2/3 height presets from above, in order, as it stacks each pin.
+## Tried PATH.JERRYIO for auton, dropped it (2026-09-26/27)
+Attempted a real path drawn in PATH.JERRYIO (pick up a pin+cup mid-route, back off, spin around, continue to a goal) instead of hand-written moves. Went through three rounds of a heading-convention bug — drove the wrong way, then spun in place instead of translating, then lost control and spun in circles — each one reasoned from documentation/source rather than a real physical test, and each one wrong in a new way. Decided it wasn't worth the risk this close to actually needing a working auto, and went back to plain sequential drive/turn/claw/lift calls (the format already used everywhere else in this project) instead. The lesson, not just the setback: trust an isolated physical test over more reading when the two disagree — should have settled the heading direction with a two-line test move before writing 30+ points around an assumption.
 
-Every drive distance and turn angle in it is a placeholder — **someone needs to pace out or measure the real distances from the starting tile to the goal and to the Loader** and report them back. Also still open:
-- Does grabbing from the Loader need the lift at a specific height, or is floor height fine? If it needs its own height, that's a 4th preset the same way the pin ones work.
-- Does the claw need to be open or closed to receive a pin from the Loader? Assumed open (same state it's in right after dropping a pin) — worth confirming on the real Loader.
-- 15 seconds is tight for 3 full Loader cycles, especially with Drive/Turn PID still untuned. Time it for real once the distances are filled in — don't be surprised if it needs cutting to 2 pins (preload + 1 cycle) to actually fit.
-- `auton_button_2()` and `auton_skills()` are still stubs — skills is its own game mode with different timing, not just a longer version of this, so it needs its own plan later.
+## Two real autos now written — both need real field numbers before they'll work
+- **`auton_button_1()`** ("Cup+Goal" on the selector) — grabs the preload, drives to a cup, drops the pin in, grabs the whole cup, backs off, spins around, drives to a goal, places it. This is the current main plan.
+- **`auton_button_2()`** ("Loader x2") — scores the preload, then does 2 Loader cycles for a 3-pin auto total, going for the 12-point auto bonus (easy — just outscore the other alliance's auto) rather than the 7-pin Autonomous Win Point (not realistic without an intake in 15 seconds). Kept as a fallback plan, not the primary one anymore.
+
+Every drive distance and turn angle in both is a placeholder — **someone needs to pace out or measure the real distances** (starting tile to the cup, cup to the goal, starting tile to the Loader) and report them back. Also still open:
+- Does dropping the pin into the cup and then grabbing the whole cup actually work as a plain open-then-close on the same claw? First guess, not confirmed against the real mechanism.
+- For the Loader plan: does grabbing from it need the lift at a specific height, or is floor height fine? Does the claw need to be open or closed to receive from it?
+- 15 seconds is tight for either auto once realistic move times are accounted for, especially with Drive/Turn PID still untuned. Time both for real once the distances are filled in.
+- `auton_skills()` is still a stub — skills is its own game mode with different timing, not just a longer version of either of these, so it needs its own plan later.
 
 ## Ideas floated, not committed to
 - Toggle auto-spin-to-alliance-color — held off because we're not 100% sure how the toggle mechanism physically works (spin vs. lift-and-flip). Check VEX's official field build video first.
