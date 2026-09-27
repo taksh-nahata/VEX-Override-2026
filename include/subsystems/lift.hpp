@@ -28,8 +28,12 @@ void go_to_floor();
 // that's going on an empty goal, on a goal with 1 pin already on it, and
 // on a goal with 2. Bound to X/B/A in main.cpp -- meant to be something a
 // driver can push without having to think about exact heights themselves.
-// Target heights are guesses in lift.cpp, tagged TODO(tune) -- there's no
-// substitute for testing these against the real stack heights.
+// Each one reads the claw's distance sensor (port 6) to see how far it
+// is from whatever's under it right now and goes that many pins' worth
+// higher, instead of a fixed absolute guess -- falls back to a fixed
+// guess if the sensor can't see anything. Auton reuses these same
+// functions, so they get the sensing for free too. Tunable numbers are
+// in lift.cpp, tagged TODO(tune).
 void go_to_pin_1();
 void go_to_pin_2();
 void go_to_pin_3();
@@ -48,6 +52,12 @@ bool is_homing();
 // Motor current draw (mA) — for tuning CONTACT_CURRENT_MA/CEILING_CURRENT_MA
 // (lift.cpp) against the debug screen.
 std::int32_t current_ma();
+
+// mm from the claw down to whatever's under it (port 6 distance sensor).
+// 9999 means it can't see anything solid. For the debug screen, and for
+// tuning PIN_LAYER_MM/PLACE_CLEARANCE_MM/LIFT_DEG_PER_MM (lift.cpp)
+// against a ruler.
+std::int32_t claw_distance_mm();
 
 // True for the tick(s) right after update() stops a downward move because
 // current spiked — hit something solid (a stack, or the true floor).

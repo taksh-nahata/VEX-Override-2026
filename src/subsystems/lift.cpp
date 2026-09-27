@@ -27,6 +27,7 @@ namespace lift {
 // ============================================================================
 pros::Motor motor(PORT_LIFT, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Rotation rotation(PORT_LIFT_ROTATION);
+pros::Distance claw_distance(PORT_CLAW_DISTANCE);  // pointed down, sees whatever's under the claw
 
 // ============================================================================
 // TUNABLE CONSTANTS — grep "TODO(tune)"/"TODO(verify)" for everything that
@@ -62,6 +63,21 @@ constexpr double PIN_3_HEIGHT_DEG = 1500;
 // of the three placing heights above, which are for stacking onto a goal,
 // not dropping into a cup sitting on the floor. Pure guess, never measured.
 constexpr double CUP_DROP_HEIGHT_DEG = 150;
+
+// TODO(tune): how many rotation-sensor degrees one mm of real claw rise
+// is -- lets go_to_pin_1/2/3() below turn a live distance-sensor reading
+// straight into a target height, same idea as the drivetrain's gear ratio
+// turning motor degrees into real inches (calibrate_straight(), autons.cpp).
+// Measure it the same way: raise the lift a known number of degrees,
+// measure the real change in claw height with a ruler, divide.
+constexpr double LIFT_DEG_PER_MM = 3.0;
+
+// TODO(tune): one pin's stacking height, and a little extra so it drops
+// in without scraping -- how much clearance we want above whatever the
+// distance sensor reads right now. Still guesses until checked against a
+// real stack.
+constexpr double PIN_LAYER_MM = 40.0;
+constexpr double PLACE_CLEARANCE_MM = 15.0;
 
 // TODO(tune): how far the lift can sag from where it was left before the
 // PID steps in to correct it. We added this after testing showed the
@@ -118,6 +134,12 @@ std::int32_t current_ma() {
   return motor.get_current_draw();
 }
 
+// mm from the claw down to whatever's directly under it. 9999 means the
+// sensor can't see anything solid (out of range).
+std::int32_t claw_distance_mm() {
+  return claw_distance.get();
+}
+
 bool touched_down() {
   return placing_contact;
 }
@@ -144,8 +166,26 @@ void go_to_floor() {
   go_to_height(0);
 }
 
+// Reads how far the claw currently is from whatever's under it (true
+// floor, or the top of an existing stack) and goes to `layer` pins' worth
+// of clearance above THAT -- so the same button works whether the goal's
+// empty or already has pins on it, instead of trusting a fixed absolute
+// height every time. Falls back to the old fixed guess if the sensor
+// can't see anything (out of range) rather than driving to a nonsense
+// target.
+void go_to_layer(int layer, double fallback_deg) {
+  std::int32_t sensed_mm = claw_distance_mm();
+  if (sensed_mm <= 0 || sensed_mm >= 9999) {
+    go_to_height(fallback_deg);
+    return;
+  }
+  double target_clearance_mm = layer * PIN_LAYER_MM + PLACE_CLEARANCE_MM;
+  double additional_rise_mm = target_clearance_mm - sensed_mm;
+  go_to_height(position() + additional_rise_mm * LIFT_DEG_PER_MM);
+}
+
 void go_to_pin_1() {
-  go_to_height(PIN_1_HEIGHT_DEG);
+  go_to_layer(1, PIN_1_HEIGHT_DEG);
 }
 
 void go_to_cup_drop() {
@@ -153,11 +193,11 @@ void go_to_cup_drop() {
 }
 
 void go_to_pin_2() {
-  go_to_height(PIN_2_HEIGHT_DEG);
+  go_to_layer(2, PIN_2_HEIGHT_DEG);
 }
 
 void go_to_pin_3() {
-  go_to_height(PIN_3_HEIGHT_DEG);
+  go_to_layer(3, PIN_3_HEIGHT_DEG);
 }
 
 void update(int stick) {

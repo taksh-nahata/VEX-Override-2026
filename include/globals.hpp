@@ -57,8 +57,13 @@ constexpr int PORT_LIFT = 1 * DIR_LIFT;
 constexpr int DIR_LIFT_ROTATION = -1;
 constexpr int PORT_LIFT_ROTATION = 8 * DIR_LIFT_ROTATION;
 
-// --- Claw (1 solenoid) --- confirmed
+// --- Claw (1 solenoid + 1 distance sensor, pointing down) --- confirmed
+// The distance sensor reads whatever's directly under the claw (true
+// floor, or the top of an existing stack) -- lift.cpp uses it to figure
+// out real placement heights instead of guessing them. Port confirmed
+// accurate 2026-09-27.
 constexpr char PORT_CLAW_SOLENOID = 'A';
+constexpr int PORT_CLAW_DISTANCE = 6;
 
 // --- Toggle spinner + color sensor --- confirmed
 constexpr int DIR_TOGGLE_SPINNER = -1;
