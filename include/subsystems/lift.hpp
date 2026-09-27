@@ -59,8 +59,10 @@ std::int32_t current_ma();
 // against a ruler.
 std::int32_t claw_distance_mm();
 
-// True for the tick(s) right after update() stops a downward move because
-// current spiked — hit something solid (a stack, or the true floor).
+// True for the tick(s) right after update() stops a downward move --
+// either the claw distance sensor read close enough to count as arrived
+// (stops it gently, before contact) or, as a backup, current spiked
+// (actual contact -- catches it even if the distance reading was bad).
 bool touched_down();
 
 // True for the tick(s) right after update() stops an upward move because

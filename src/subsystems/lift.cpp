@@ -101,6 +101,15 @@ constexpr std::int32_t CEILING_CURRENT_MA = 2200;
 // alone would trip a false stop the instant R1/R2 is pressed.
 constexpr int CONTACT_DEBOUNCE_TICKS = 5;
 
+// TODO(tune): how close the claw-to-surface reading has to get, while
+// lowering, before we stop it -- meant to catch it a little BEFORE
+// contact instead of after, unlike the current-sensing check above,
+// which only fires once something's already jammed against it. Kept as
+// an addition to the current check, not a replacement -- an out-of-range
+// or bad reading here just falls through to the current-based stop still
+// catching a real hard contact.
+constexpr std::int32_t DISTANCE_STOP_MM = 20;
+
 // ============================================================================
 // STATE
 // ============================================================================
@@ -209,9 +218,12 @@ void update(int stick) {
       at_ceiling = false;
       ceiling_high_ticks = 0;
 
+      std::int32_t sensed_mm = claw_distance_mm();
+      bool distance_close = sensed_mm > 0 && sensed_mm <= DISTANCE_STOP_MM;
+
       bool current_high = current_ma() > CONTACT_CURRENT_MA;
       contact_high_ticks = current_high ? contact_high_ticks + 1 : 0;
-      placing_contact = contact_high_ticks >= CONTACT_DEBOUNCE_TICKS;
+      placing_contact = distance_close || contact_high_ticks >= CONTACT_DEBOUNCE_TICKS;
       if (placing_contact) {
         // True stop -- doesn't open the claw. Dropping a pin can't be
         // undone, so we kept that a deliberate, separate button press
