@@ -72,11 +72,17 @@ constexpr double CUP_DROP_HEIGHT_DEG = 150;
 // measure the real change in claw height with a ruler, divide.
 constexpr double LIFT_DEG_PER_MM = 3.0;
 
-// TODO(tune): one pin's stacking height, and a little extra so it drops
-// in without scraping -- how much clearance we want above whatever the
-// distance sensor reads right now. Still guesses until checked against a
-// real stack.
-constexpr double PIN_LAYER_MM = 40.0;
+// A Pin is 6.5in (165mm) tall, 1.6in (40mm) diameter -- official spec,
+// game manual Appendix B ("Pin -"). But Pins nest into each other when
+// stacked (<SC2>: "partially or entirely nested"), so the real height one
+// more stacked pin adds is less than its full 165mm -- the manual doesn't
+// publish that overlap as a number, only as an uncoted figure. Using the
+// full un-nested height here is a deliberately safe overshoot (worst case
+// the lift goes a bit higher than it needs to, not into the stack) until
+// it's checked against two real nested pins with a ruler.
+constexpr double PIN_LAYER_MM = 165.0;
+// TODO(tune): margin so the pin drops in without scraping -- not a spec'd
+// number, just an engineering guess.
 constexpr double PLACE_CLEARANCE_MM = 15.0;
 
 // TODO(tune): how far the lift can sag from where it was left before the
