@@ -50,9 +50,17 @@ void run_selected();
 void run_after_delay(void* param) {
   int my_generation = static_cast<int>(reinterpret_cast<std::intptr_t>(param));
   pros::delay(AUTO_RUN_DELAY_MS);
-  if (my_generation == generation && !pros::competition::is_disabled()) {
-    run_selected();
+  if (my_generation != generation) return;  // superseded by a later tap
+
+  // Printed either way, not just on success -- if this is ever stuck on
+  // "BLOCKED" the whole time, the auto-run gate itself is the problem,
+  // not whatever the auton is supposed to do.
+  if (pros::competition::is_disabled()) {
+    lv_label_set_text(status_label, "BLOCKED -- robot is disabled, not enabled");
+    return;
   }
+  lv_label_set_text(status_label, "RUNNING NOW");
+  run_selected();
 }
 
 void on_option_clicked(lv_event_t* e) {

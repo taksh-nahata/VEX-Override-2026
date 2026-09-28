@@ -59,9 +59,9 @@ constexpr double ODOM_HORIZONTAL_OFFSET = -1.97;
 constexpr int DIR_LIFT = 1;
 constexpr int PORT_LIFT = 1 * DIR_LIFT;
 
-// TODO(verify): brand new motor, direction not bench-checked yet --
-// flip this if it fights the first motor instead of helping it.
-constexpr int DIR_LIFT_2 = 1;
+// Bench-confirmed 2026-09-27: needed the opposite sign from the first
+// motor to actually help it instead of fighting it.
+constexpr int DIR_LIFT_2 = -1;
 constexpr int PORT_LIFT_2 = 5 * DIR_LIFT_2;
 
 constexpr int DIR_LIFT_ROTATION = -1;
