@@ -271,18 +271,14 @@ void opcontrol() {
     // Claw
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) claw::toggle();
 
-    // Toggle target color -- UP swaps between red and blue, Y jumps
-    // straight to yellow. What's picked shows up on the controller screen
-    // (controller_feedback() above), so the driver always knows.
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
-      toggle::toggle_target_red_blue();
-    }
+    // Toggle target color -- Y jumps straight to yellow. UP is borrowed
+    // below (bench test), so red/blue swap has no button right now.
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)) {
       toggle::set_target_yellow();
     }
 
-    // Lift height presets -- one button per pin, so the driver doesn't
-    // have to eyeball a height with R1/R2 every cycle. X/B/A print which
+    // Lift height presets -- one button per height, so the driver doesn't
+    // have to eyeball a height with R1/R2 every cycle. Each prints which
     // one got pressed so it's obvious even before the lift finishes
     // moving. R1/R2 immediately take back manual control if pressed
     // during a preset move (see lift::update()).
@@ -297,6 +293,22 @@ void opcontrol() {
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
       lift::go_to_pin_3();
       master.print(0, 2, "PIN 3");
+    }
+    // BENCH TEST -- the other three lift moves, so every height can be
+    // checked against a real stack without editing/reflashing code
+    // between tries. Borrows UP (toggle red/blue swap loses its button
+    // until this comes back out).
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
+      lift::go_to_floor();
+      master.print(0, 2, "FLOOR");
+    }
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
+      lift::go_to_cup_drop();
+      master.print(0, 2, "CUP DROP");
+    }
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
+      lift::go_to_cup_on_goal();
+      master.print(0, 2, "CUP ON GOAL");
     }
 
     // Lift: R1 raises, R2 lowers, that's the whole manual interface.
