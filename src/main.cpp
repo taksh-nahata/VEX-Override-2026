@@ -57,11 +57,11 @@ int auton_index = 2;  // defaults to Skills
 void cycle_auton_selection(int line) {
   if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
     auton_index = (auton_index - 1 + AUTON_COUNT) % AUTON_COUNT;
-    master.print(0, line, "Auton: %-11s", auton_options[auton_index].name);
+    master.print(line, 0, "Auton: %-11s", auton_options[auton_index].name);
   }
   if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
     auton_index = (auton_index + 1) % AUTON_COUNT;
-    master.print(0, line, "Auton: %-11s", auton_options[auton_index].name);
+    master.print(line, 0, "Auton: %-11s", auton_options[auton_index].name);
   }
 }
 
@@ -274,7 +274,7 @@ void match_clock_update() {
   if (!endgame_warned && elapsed >= MATCH_DURATION_MS - ENDGAME_WARNING_MS) {
     endgame_warned = true;
     master.rumble("- - -");
-    master.print(0, 1, "ENDGAME: MIDFIELD");  // line 1 -- line 0 is the auton selection
+    master.print(1, 0, "ENDGAME: MIDFIELD");  // line 1 -- line 0 is the auton selection
   }
 }
 
@@ -300,7 +300,7 @@ void opcontrol() {
     // BENCH TEST ONLY -- runs whatever's selected right now, without
     // needing a competition switch. Never in a real match.
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
-      master.print(0, 2, "RUNNING AUTON");
+      master.print(2, 0, "RUNNING AUTON");
       auton_options[auton_index].fn();
     }
 
@@ -314,15 +314,15 @@ void opcontrol() {
     // during a preset move (see lift::update()).
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) {
       lift::go_to_alliance_goal();
-      master.print(0, 2, "ALLIANCE GOAL");
+      master.print(2, 0, "ALLIANCE GOAL");
     }
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
       lift::go_to_neutral_goal();
-      master.print(0, 2, "NEUTRAL GOAL");
+      master.print(2, 0, "NEUTRAL GOAL");
     }
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
       lift::go_to_center_goal();
-      master.print(0, 2, "CENTER GOAL");
+      master.print(2, 0, "CENTER GOAL");
     }
 
     // Lift: R1 raises, R2 lowers, that's the whole manual interface.

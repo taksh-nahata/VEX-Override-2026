@@ -148,7 +148,7 @@ void calibrate_straight() {
 
   double drive_in = (chassis.drive_sensor_left() + chassis.drive_sensor_right()) / 2.0;
   double tracker_in = horizontal_tracker.get();
-  master.print(0, 2, "drv%.1f trk%.1f in", drive_in, tracker_in);
+  master.print(2, 0, "drv%.1f trk%.1f in", drive_in, tracker_in);
   pros::screen::print(TEXT_MEDIUM, 5, "CALIB straight: drive=%.2fin tracker=%.2fin -- tape-measure real distance",
                        drive_in, tracker_in);
 }
@@ -173,7 +173,7 @@ void calibrate_spin() {
   double offset_estimate = radians != 0 ? lateral_in / radians : 0;
 
   // odom_x/odom_y (not lateral_in again) are what actually reflect a fix to the offset constant
-  master.print(0, 2, "odX%.2f odY%.2f", chassis.odom_x_get(), chassis.odom_y_get());
+  master.print(2, 0, "odX%.2f odY%.2f", chassis.odom_x_get(), chassis.odom_y_get());
   pros::screen::print(TEXT_MEDIUM, 5,
                        "CALIB spin: rot=%.1fdeg raw_lateral=%.2fin off_est~%.3fin  odom_x=%.2f odom_y=%.2f",
                        actual_rotation_deg, lateral_in, offset_estimate, chassis.odom_x_get(), chassis.odom_y_get());
