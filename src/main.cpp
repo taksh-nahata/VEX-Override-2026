@@ -25,15 +25,22 @@ ez::Drive chassis(
 ez::tracking_wheel horizontal_tracker(PORT_ODOM_HORIZONTAL, ODOM_HORIZONTAL_WHEEL_DIAMETER, ODOM_HORIZONTAL_OFFSET);
 
 // ----------------------------------------------------------------------------
+// AUTON SELECTION -- plain controller buttons during the disabled
+// (pre-match) period, no screen library involved at all. We tried a
+// custom LVGL selector (a real header/library version mismatch, then a
+// screen that stopped responding after running once), then EZ-Template's
+// own LLEMU-based selector (which produced a hard data abort crash on
+// this robot) -- rather than debug a low-level memory fault blind a
+// third time, this avoids every screen API entirely. What's picked shows
+// on the controller screen instead, which is what the driver actually
+// looks at anyway, not the brain screen.
+// ----------------------------------------------------------------------------
+using AutonFn = void (*)();
+AutonFn selected_auton = auton_skills;
+const char* selected_auton_name = "Skills";
+
+// ----------------------------------------------------------------------------
 // INITIALIZATION
-// Auton picking uses EZ-Template's own stock selector (LLEMU 3-button
-// screen + SD card) instead of a custom LVGL one -- we had a custom
-// button/logo screen for a while, but chased down enough LVGL-specific
-// bugs (a real header/library version mismatch, then a screen that
-// never rebuilt after running once) that it wasn't worth maintaining
-// over the plain, already-proven mechanism EZ-Template ships with.
-// Holding B and DOWN in driver control runs the selected auton without
-// a competition switch (built into EZ-Template, no code needed here).
 // ----------------------------------------------------------------------------
 void initialize() {
   chassis.opcontrol_curve_default_set(2.1, 4.3);
@@ -45,17 +52,31 @@ void initialize() {
   lift::initialize();
   toggle::initialize();
   sdlog::start();  // background SD card logging, see sdlog.hpp
-
-  ez::as::auton_selector.autons_add({
-      {"Cup+Goal", auton_button_1},
-      {"Loader x2", auton_button_2},
-      {"Skills", auton_skills},
-      {"Drive Test", tune_test},
-  });
-  ez::as::initialize();
 }
 
-void disabled() {}
+// X/B/A/Y pick an auton while the robot is disabled (pre-match) -- same
+// buttons used for lift presets in opcontrol(), but that's fine, nothing
+// lift-related should be happening while disabled anyway.
+void disabled() {
+  while (true) {
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) {
+      selected_auton = auton_button_1;
+      selected_auton_name = "Cup+Goal";
+    } else if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
+      selected_auton = auton_button_2;
+      selected_auton_name = "Loader x2";
+    } else if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
+      selected_auton = auton_skills;
+      selected_auton_name = "Skills";
+    } else if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)) {
+      selected_auton = tune_test;
+      selected_auton_name = "Drive Test";
+    }
+    master.print(0, 0, "Auton: %-11s", selected_auton_name);
+    pros::delay(50);
+  }
+}
+
 void competition_initialize() {}
 
 // ----------------------------------------------------------------------------
@@ -65,7 +86,7 @@ void autonomous() {
   chassis.pid_targets_reset();
   chassis.drive_sensor_reset();
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_HOLD);
-  ez::as::auton_selector.selected_auton_call();
+  selected_auton();
 }
 
 // ----------------------------------------------------------------------------
@@ -279,6 +300,13 @@ void opcontrol() {
     anti_tip_apply();
     chassis.opcontrol_arcade_standard(ez::SPLIT);
     anti_tip_corrective_drive();  // overrides the drive command above if we're actively tipping
+
+    // BENCH TEST ONLY -- runs whatever's selected (see disabled()) right
+    // now, without needing a competition switch. Never in a real match.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
+      master.print(0, 2, "RUNNING AUTON");
+      selected_auton();
+    }
 
     // Claw
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) claw::toggle();

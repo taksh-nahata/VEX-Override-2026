@@ -36,11 +36,11 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 
 ## Picking an auton
 
-This uses EZ-Template's own built-in selector (LLEMU 3-button screen + SD card), not custom code — we tried a custom LVGL logo/button screen for a while, but it kept surfacing LVGL-specific bugs (a real header/library version mismatch, then a screen that didn't rebuild after running once) that weren't worth maintaining over the plain, already-proven mechanism EZ-Template ships with.
+Plain controller buttons, no brain screen involved at all — we tried a custom LVGL logo/button screen (real header/library bugs, then a screen that stopped responding after running once), then EZ-Template's own built-in LLEMU selector (which crashed the brain with a data abort), so this avoids every screen API entirely.
 
-At boot, use the brain screen's left/right buttons to page through the 4 options (Cup+Goal, Loader x2, Skills, Drive Test) and the center button to select. Your choice is saved to the SD card and survives a power cycle. That selection is what runs once a real autonomous period starts (competition switch/field control at an event).
+**While the robot is disabled** (before a match starts, or any time it isn't in autonomous/driver control): **X** = Cup+Goal, **B** = Loader x2, **A** = Skills, **Y** = Drive Test. Whatever's picked prints to the controller screen (`Auton: ...`), which is what the driver's actually looking at anyway.
 
-For bench testing without a competition switch: hold **B and DOWN together** during driver control to run whatever's currently selected, right now (built into EZ-Template, version 3.1.0+).
+For bench testing without a competition switch: once enabled, hold **DOWN** during driver control to run whatever's currently selected, right now. Never used in an actual match.
 
 ## Hardware status
 
