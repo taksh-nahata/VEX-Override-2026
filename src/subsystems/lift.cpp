@@ -14,13 +14,15 @@ namespace lift {
 // ============================================================================
 // HARDWARE
 // One motor on the second four-bar (1:6 external reduction). Height
-// control is driven entirely by the claw distance sensor (points down,
-// sees whatever's under the claw) -- there's no rotation-sensor/degree
-// math in the lift's own control anymore. The rotation sensor still
-// exists for position(), which main.cpp's anti-tip uses to scale speed
-// by how high the lift physically is (something the distance sensor
-// can't tell you, since it measures clearance to whatever's below, not
-// the arm's own angle).
+// control is driven entirely by the claw distance sensor (points down)
+// -- there's no rotation-sensor/degree math in the lift's own control
+// anymore. In practice this mostly reads distance to the floor, not
+// necessarily whatever's stacked on a goal, so every target below is
+// really "how high above the ground," not "how far above the current
+// stack." The rotation sensor still exists for position(), which
+// main.cpp's anti-tip uses to scale speed by how high the lift
+// physically is (something the distance sensor can't tell you, since it
+// measures clearance to whatever's below, not the arm's own angle).
 // ============================================================================
 pros::Motor motor(PORT_LIFT, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Rotation rotation(PORT_LIFT_ROTATION);
@@ -159,40 +161,41 @@ int seek_speed(int error_mm) {
 
 // ============================================================================
 // PUBLIC CONTROL
-// Every go_to_*() below is the same idea: read how far the claw is from
-// whatever's under it right now, and rise/lower until it's
-// `target_clearance_mm` above that instead. If the sensor can't see
-// anything, we just don't move -- no guessed fallback height.
+// go_to_height() is the one real move: pass a target in mm and it
+// rises/lowers until the distance sensor reads that. Everything else
+// below is just a named shortcut for a number someone would otherwise
+// have to remember. If the sensor can't see anything, we just don't
+// move -- no guessed fallback height.
 // ============================================================================
 
-void go_to_clearance(int target_clearance_mm) {
+void go_to_height(int target_mm_) {
   homing = true;
   holding = false;
-  target_mm = target_clearance_mm;
+  target_mm = target_mm_;
 }
 
 void go_to_floor() {
-  go_to_clearance(0);
+  go_to_height(0);
 }
 
 void go_to_pin_1() {
-  go_to_clearance(1 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
+  go_to_height(1 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
 }
 
 void go_to_pin_2() {
-  go_to_clearance(2 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
+  go_to_height(2 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
 }
 
 void go_to_pin_3() {
-  go_to_clearance(3 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
+  go_to_height(3 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
 }
 
 void go_to_cup_on_goal() {
-  go_to_clearance(CUP_WITH_PIN_MM + PLACE_CLEARANCE_MM);
+  go_to_height(CUP_WITH_PIN_MM + PLACE_CLEARANCE_MM);
 }
 
 void go_to_cup_drop() {
-  go_to_clearance(CUP_DROP_CLEARANCE_MM);
+  go_to_height(CUP_DROP_CLEARANCE_MM);
 }
 
 void update(int stick) {

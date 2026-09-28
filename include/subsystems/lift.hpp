@@ -4,8 +4,11 @@
 
 // DR4B lift: 1 motor on the second four-bar, through a 1:6 external
 // reduction. Height control is entirely driven by the claw's distance
-// sensor (points down, sees whatever's under the claw) -- there's no
-// separate degree/rotation-sensor math involved. See lift.cpp.
+// sensor (points down) -- there's no separate degree/rotation-sensor
+// math involved. In practice this mostly reads distance to the floor,
+// not necessarily whatever's stacked on a goal, so go_to_height() below
+// is really "how high above the ground," not "how far above the current
+// stack." See lift.cpp.
 namespace lift {
 
 void initialize();
@@ -19,17 +22,19 @@ double position();
 // opcontrol loop, even when neither button is held.
 void update(int stick);
 
-// Goes to true floor (clearance 0 above whatever's under the claw).
+// The one real move: rises/lowers until the claw distance sensor reads
+// target_mm. Use this directly in autons.cpp for a height that doesn't
+// have its own name below. If the sensor can't see anything, the lift
+// just doesn't move rather than guessing.
+void go_to_height(int target_mm);
+
+// Goes to true floor (go_to_height(0)).
 void go_to_floor();
 
 // Presets for the three heights we actually use in a match: the pin
 // going on an empty goal, on a goal with 1 pin already on it, and on a
-// goal with 2. Bound to X/B/A in main.cpp. Each one reads the claw
-// distance sensor to see how far it is from whatever's under it right
-// now, and rises that many pins' worth higher -- so the same button
-// works whether the goal's empty or already has pins on it. If the
-// sensor can't see anything, the lift just doesn't move rather than
-// guessing. Tunable numbers are in lift.cpp, tagged TODO(tune).
+// goal with 2. Bound to X/B/A in main.cpp. Tunable numbers are in
+// lift.cpp, tagged TODO(tune).
 void go_to_pin_1();
 void go_to_pin_2();
 void go_to_pin_3();
