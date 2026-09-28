@@ -268,16 +268,6 @@ void opcontrol() {
     chassis.opcontrol_arcade_standard(ez::SPLIT);
     anti_tip_corrective_drive();  // overrides the drive command above if we're actively tipping
 
-    // BENCH TEST ONLY -- runs whatever's selected on the auton screen
-    // right now, without needing a competition switch/field control to
-    // trigger a real autonomous() call. Never do this in an actual match
-    // (autonomous() already runs the selection for you) -- DOWN was
-    // picked because it's not used for anything else.
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
-      master.print(0, 2, "RUNNING AUTON");
-      ui::run_selected();
-    }
-
     // Claw
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) claw::toggle();
 

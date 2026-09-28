@@ -30,10 +30,30 @@ lv_obj_t* option_buttons[OPTION_COUNT] = {nullptr};
 
 constexpr uint32_t SELECTED_COLOR = 0x2266ff;
 
+// Bench-test convenience: tapping a button on screen runs it 3 seconds
+// later, no competition switch/field control needed. Gated on the robot
+// actually being enabled (not disabled) at the 3-second mark -- picking
+// an auton during the normal pre-match disabled period (which every real
+// match starts with) must NOT make the robot start driving on its own.
+// `generation` lets a later tap cancel an earlier pending run without
+// needing to track/kill the task directly.
+constexpr std::uint32_t AUTO_RUN_DELAY_MS = 3000;
+int generation = 0;
+
+void run_selected();
+
+void run_after_delay(void* param) {
+  int my_generation = static_cast<int>(reinterpret_cast<std::intptr_t>(param));
+  pros::delay(AUTO_RUN_DELAY_MS);
+  if (my_generation == generation && !pros::competition::is_disabled()) {
+    run_selected();
+  }
+}
+
 void on_option_clicked(lv_event_t* e) {
   auto* opt = static_cast<AutonOption*>(lv_event_get_user_data(e));
   selected_fn = opt->fn;
-  lv_label_set_text_fmt(status_label, "Selected: %s", opt->label);
+  lv_label_set_text_fmt(status_label, "Selected: %s (runs in 3s if enabled)", opt->label);
 
   for (int i = 0; i < OPTION_COUNT; i++) {
     if (options[i].fn == opt->fn) {
@@ -42,6 +62,9 @@ void on_option_clicked(lv_event_t* e) {
       lv_obj_remove_style(option_buttons[i], nullptr, 0);
     }
   }
+
+  int my_generation = ++generation;
+  pros::Task(run_after_delay, reinterpret_cast<void*>(static_cast<std::intptr_t>(my_generation)));
 }
 
 void show_splash() {

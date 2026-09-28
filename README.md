@@ -32,13 +32,14 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 - **L1** — toggle claw open/closed.
 - **L2** (hold) — spin the toggle wheel toward the current target color; stops automatically on reaching it.
 - **UP** — swap the toggle target between red/blue. **Y** — set it to yellow. Shown on the controller screen.
-- **DOWN** — **bench test only.** Runs whatever auton is currently selected on the brain screen, right now, without needing a real autonomous period (competition switch/field control) to trigger it. Never used in an actual match.
 
 The drivetrain PID tuner and the drivetrain/odometry calibration test moves are still in `autons.cpp` (`tune_test()`, `calibrate_straight()`, `calibrate_spin()`) but not currently wired to any button — we freed up X/B/A/LEFT for the lift presets above. Ask if you want them back on the controller for more drivetrain tuning.
 
 ## Picking an auton
 
-At boot, the brain screen shows our logo then 3 buttons (Cup+Goal / Loader x2 / Skills) plus a "Selected: ..." label — tap one on the physical screen to choose it. That selection is what actually runs once a real autonomous period starts (a competition switch/field control, or DOWN above for bench testing). Our code has no way to start that period on its own — it's triggered externally, same as at a real event.
+At boot, the brain screen shows our logo then 3 buttons (Cup+Goal / Loader x2 / Skills) plus a "Selected: ..." label — tap one on the physical screen to choose it. That selection is what runs once a real autonomous period starts (competition switch/field control at an event).
+
+For bench testing without a competition switch: tapping a button also runs it 3 seconds later, but only if the robot is actually enabled (in driver control) at that moment — tapping during the normal pre-match disabled wait does nothing on its own, same as at a real event. Tap a different button within those 3 seconds to cancel and pick something else instead.
 
 ## Hardware status
 

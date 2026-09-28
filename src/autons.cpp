@@ -37,6 +37,7 @@ void lift_wait(std::uint32_t timeout_ms = 1000) {
 // open-then-close on the same claw, not confirmed against the real mechanism.
 void auton_button_1() {
   claw::close();          // preload is already in the claw at match start
+  pros::delay(300);        // wait for the claw to close
   lift::go_to_cup_drop();
   lift_wait();
   chassis.pid_drive_set(7, 70, true);  // drive to the cup
