@@ -7,10 +7,6 @@ void default_constants() {
   chassis.pid_heading_constants_set(11.0, 0.0, 20.0);
   chassis.pid_turn_constants_set(3.0, 0.05, 20.0, 15.0);
   chassis.pid_swing_constants_set(6.0, 0.0, 65.0);
-  // TODO(missing): pid_odom_angular_constants_set() isn't set -- fine for
-  // now since every pid_odom_set() call we make is a straight relative
-  // distance (no lateral component to correct), but a real point-to-point
-  // or turn-to-point move would need this tuned too.
 
   chassis.pid_turn_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
   chassis.pid_swing_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
@@ -44,8 +40,13 @@ void auton_button_1() {
   pros::delay(300);        // wait for the claw to close
   lift::go_to_cup_drop();
   lift_wait();
-  chassis.pid_odom_set(7, 70, true);  // drive to the cup
+  chassis.pid_drive_set(7, 70, true);  // drive to the cup
   chassis.pid_wait();
+  chassis.pid_turn_set(-90_deg, 90, true);  // turn to the cup
+  chassis.pid_wait_quick_chain();
+  chassis.pid_drive_set(6, 70, true);  // drive to the cup
+  chassis.pid_wait_quick_chain();
+  chassis.pid_turn_set(-45_deg, 90, true);  // turn to the cup
 
   claw::open();   // drop the pin into the cup
   pros::delay(300);
@@ -56,12 +57,12 @@ void auton_button_1() {
   lift::go_to_pin_1();  // lift the whole cup+pin unit up to the goal height
   lift_wait();
 
-  chassis.pid_odom_set(-6, 60, true);  // back off so the turn doesn't drag the cup
+  chassis.pid_drive_set(-6, 60, true);  // back off so the turn doesn't drag the cup
   chassis.pid_wait();
   chassis.pid_turn_set(180, 90, true);  // spin around
   chassis.pid_wait();
 
-  chassis.pid_odom_set(9, 70, true);  // drive to the goal
+  chassis.pid_drive_set(9, 70, true);  // drive to the goal
   chassis.pid_wait();
   lift::go_to_pin_on_cup();  // it's the whole cup+pin unit going down, not a bare pin
   lift_wait();
@@ -75,41 +76,41 @@ void auton_button_1() {
 void auton_button_2() {
   lift::go_to_pin_1();  // empty goal height
   lift_wait();
-  chassis.pid_odom_set(12, 90, true);  // drive to the goal
+  chassis.pid_drive_set(12, 90, true);  // drive to the goal
   chassis.pid_wait();
   claw::open();  // drop the preload
   pros::delay(200);
 
   chassis.pid_turn_set(90, 90, true);  // turn to the Loader
   chassis.pid_wait();
-  chassis.pid_odom_set(12, 90, true);  // drive to the Loader
+  chassis.pid_drive_set(12, 90, true);  // drive to the Loader
   chassis.pid_wait();
   claw::close();  // grab pin #2
   pros::delay(200);
-  chassis.pid_odom_set(-12, 90, true);  // back out of the Loader
+  chassis.pid_drive_set(-12, 90, true);  // back out of the Loader
   chassis.pid_wait();
   chassis.pid_turn_set(-90, 90, true);  // turn back to the goal
   chassis.pid_wait();
   lift::go_to_pin_2();  // goal now has 1 pin on it
   lift_wait();
-  chassis.pid_odom_set(12, 90, true);  // drive to the goal
+  chassis.pid_drive_set(12, 90, true);  // drive to the goal
   chassis.pid_wait();
   claw::open();  // stack pin #2
   pros::delay(200);
 
   chassis.pid_turn_set(90, 90, true);  // turn to the Loader
   chassis.pid_wait();
-  chassis.pid_odom_set(12, 90, true);  // drive to the Loader
+  chassis.pid_drive_set(12, 90, true);  // drive to the Loader
   chassis.pid_wait();
   claw::close();  // grab pin #3
   pros::delay(200);
-  chassis.pid_odom_set(-12, 90, true);  // back out of the Loader
+  chassis.pid_drive_set(-12, 90, true);  // back out of the Loader
   chassis.pid_wait();
   chassis.pid_turn_set(-90, 90, true);  // turn back to the goal
   chassis.pid_wait();
   lift::go_to_pin_3();  // goal now has 2 pins on it
   lift_wait();
-  chassis.pid_odom_set(12, 90, true);  // drive to the goal
+  chassis.pid_drive_set(12, 90, true);  // drive to the goal
   chassis.pid_wait();
   claw::open();  // stack pin #3
 }
@@ -117,7 +118,7 @@ void auton_button_2() {
 // Runs while the drivetrain PID tuner (main.cpp's X/B) is on, so there's an actual move to judge
 // the live values against: drives 24in, then turns 90deg.
 void tune_test() {
-  chassis.pid_odom_set(24_in, 90, true);
+  chassis.pid_drive_set(24_in, 90, true);
   chassis.pid_wait();
   chassis.pid_turn_set(90_deg, 90, true);
   chassis.pid_wait();
