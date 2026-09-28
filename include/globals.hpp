@@ -46,13 +46,23 @@ constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — confirmed
 // the raw wheel reading) to confirm this actually zeroed the drift out.
 constexpr double ODOM_HORIZONTAL_OFFSET = -1.97;
 
-// --- DR4B lift (1 motor, second four-bar, 1:6 external reduction) --- confirmed
-// The rotation sensor sits on the 72T (four-bar) shaft, past the
-// reduction, so it tells us the arm's real angle instead of us trusting
-// the motor's own encoder through the gear mesh. See lift.cpp for the
-// full reasoning and how each one gets used.
+// --- DR4B lift (2 motors on one shared shaft, second four-bar, 1:6
+// external reduction) --- 2nd motor added 2026-09-27 for more power/
+// precision. Being on the same physical shaft (not separate gearing per
+// side, like the old crooked 2-motor lift) means these two can't get out
+// of sync with each other -- no sync PID needed, just command both the
+// same, same as one motor with more torque. The rotation sensor sits on
+// the 72T (four-bar) shaft, past the reduction, so it tells us the arm's
+// real angle instead of us trusting either motor's own encoder through
+// the gear mesh. See lift.cpp for the full reasoning and how each one
+// gets used.
 constexpr int DIR_LIFT = 1;
 constexpr int PORT_LIFT = 1 * DIR_LIFT;
+
+// TODO(verify): brand new motor, direction not bench-checked yet --
+// flip this if it fights the first motor instead of helping it.
+constexpr int DIR_LIFT_2 = 1;
+constexpr int PORT_LIFT_2 = 5 * DIR_LIFT_2;
 
 constexpr int DIR_LIFT_ROTATION = -1;
 constexpr int PORT_LIFT_ROTATION = 8 * DIR_LIFT_ROTATION;

@@ -13,19 +13,34 @@ namespace lift {
 
 // ============================================================================
 // HARDWARE
-// One motor on the second four-bar (1:6 external reduction). Real moves
-// (go_to_height() and everything built on it) are driven entirely by the
-// claw distance sensor, converted straight to inches -- no rotation-
-// sensor/degree math, no calibration constant. The rotation sensor still
-// exists for position() (main.cpp's anti-tip -- something the distance
-// sensor can't tell you, since it measures clearance to whatever's
-// below, not the arm's own angle) and for idle hold below (it's not
-// noisy the way the distance sensor is, and holding steady doesn't need
-// to know what's on the ground anyway).
+// 2 motors on the second four-bar (1:6 external reduction), sharing one
+// physical shaft -- not separate gearing per side like the old crooked
+// 2-motor lift, so these two can't get out of sync with each other.
+// move()/brake_both()/current_ma() below just command/read both. Real
+// moves (go_to_height() and everything built on it) are driven entirely
+// by the claw distance sensor, converted straight to inches -- no
+// rotation-sensor/degree math, no calibration constant. The rotation
+// sensor still exists for position() (main.cpp's anti-tip -- something
+// the distance sensor can't tell you, since it measures clearance to
+// whatever's below, not the arm's own angle) and for idle hold below
+// (it's not noisy the way the distance sensor is, and holding steady
+// doesn't need to know what's on the ground anyway).
+//
+// Plain pros::Motor x2, not pros::MotorGroup -- MotorGroup hit an
+// undefined-reference link error against this project's compiled PROS
+// library (pros::rtos::Mutex), the same class of header/library
+// mismatch that bit LVGL earlier this project. Two motors moved
+// together needs nothing fancier than calling the same thing on both.
 // ============================================================================
 pros::Motor motor(PORT_LIFT, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
+pros::Motor motor_2(PORT_LIFT_2, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Rotation rotation(PORT_LIFT_ROTATION);
 pros::Distance claw_distance(PORT_CLAW_DISTANCE);
+
+void move(int voltage) {
+  motor.move(voltage);
+  motor_2.move(voltage);
+}
 
 constexpr double MM_PER_IN = 25.4;
 
@@ -69,7 +84,10 @@ constexpr double HOLD_GAIN = 2.0;
 // something solid. The ceiling threshold is set higher on purpose --
 // raising fights gravity and lowering doesn't, so normal raising
 // current runs higher than normal lowering current even with nothing
-// in the way.
+// in the way. These were tuned for a single motor -- with the load now
+// split across two motors on the same shaft, one motor's current for
+// the same stall could look different, so re-check both against the
+// debug screen's live mA reading.
 constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
 constexpr std::int32_t CEILING_CURRENT_MA = 2200;
 
@@ -97,6 +115,7 @@ int ceiling_high_ticks = 0;
 
 void initialize() {
   motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  motor_2.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   rotation.reset_position();
 }
 
@@ -104,6 +123,11 @@ double position() {
   return rotation.get_position() / 100.0;  // sensor reports centidegrees
 }
 
+// Just the first motor's current (MotorGroup::get_current_draw()
+// defaults to index 0) -- fine since both motors are rigidly on the
+// same shaft and share the load, but a stall now splits its current
+// across two motors instead of one, so CONTACT_CURRENT_MA/
+// CEILING_CURRENT_MA below may read differently than they used to.
 std::int32_t current_ma() {
   return motor.get_current_draw();
 }
@@ -215,7 +239,7 @@ void update(int stick) {
       if (placing_contact) {
         // True stop -- doesn't open the claw. Dropping a pin can't be
         // undone, so that's still a deliberate, separate button press.
-        motor.move(0);
+        move(0);
         return;
       }
     } else {
@@ -226,12 +250,12 @@ void update(int stick) {
       ceiling_high_ticks = current_high ? ceiling_high_ticks + 1 : 0;
       at_ceiling = ceiling_high_ticks >= CONTACT_DEBOUNCE_TICKS;
       if (at_ceiling) {
-        motor.move(0);
+        move(0);
         return;
       }
     }
 
-    motor.move(stick);
+    move(stick);
     return;
   }
 
@@ -247,18 +271,18 @@ void update(int stick) {
     if (!have_reading) {
       // Nothing to measure against -- stop rather than guess.
       homing = false;
-      motor.move(0);
+      move(0);
       return;
     }
     double error = target_in - in;
     if (std::fabs(error) <= ARRIVED_TOLERANCE_IN) {
       homing = false;
-      motor.move(0);
+      move(0);
       return;
     }
     int speed = std::clamp(static_cast<int>(error * SEEK_GAIN), -SEEK_SPEED, SEEK_SPEED);
     if (speed > 0) speed += GRAVITY_HOLD;
-    motor.move(speed);
+    move(speed);
     return;
   }
 
@@ -274,9 +298,9 @@ void update(int stick) {
   if (std::fabs(drift_deg) > HOLD_DEADBAND_DEG) {
     int speed = std::clamp(static_cast<int>(drift_deg * HOLD_GAIN), -SEEK_SPEED, SEEK_SPEED);
     if (speed > 0) speed += GRAVITY_HOLD;
-    motor.move(speed);
+    move(speed);
   } else {
-    motor.move(0);
+    move(0);
   }
 }
 
