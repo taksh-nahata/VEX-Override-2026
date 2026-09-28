@@ -13,28 +13,31 @@ namespace lift {
 
 // ============================================================================
 // HARDWARE
-// One motor on the second four-bar (1:6 external reduction). Height
-// control is driven entirely by the claw distance sensor (points down)
-// -- there's no rotation-sensor/degree math in the lift's own control
-// anymore. In practice this mostly reads distance to the floor, not
-// necessarily whatever's stacked on a goal, so every target below is
-// really "how high above the ground," not "how far above the current
-// stack." The rotation sensor still exists for position(), which
-// main.cpp's anti-tip uses to scale speed by how high the lift
-// physically is (something the distance sensor can't tell you, since it
-// measures clearance to whatever's below, not the arm's own angle).
+// One motor on the second four-bar (1:6 external reduction). Real moves
+// (go_to_height() and everything built on it) are driven entirely by the
+// claw distance sensor, converted straight to inches -- no rotation-
+// sensor/degree math, no calibration constant. The rotation sensor still
+// exists for position() (main.cpp's anti-tip -- something the distance
+// sensor can't tell you, since it measures clearance to whatever's
+// below, not the arm's own angle) and for idle hold below (it's not
+// noisy the way the distance sensor is, and holding steady doesn't need
+// to know what's on the ground anyway).
 // ============================================================================
 pros::Motor motor(PORT_LIFT, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Rotation rotation(PORT_LIFT_ROTATION);
 pros::Distance claw_distance(PORT_CLAW_DISTANCE);
 
+constexpr double MM_PER_IN = 25.4;
+
 // ============================================================================
 // TUNABLE CONSTANTS — grep "TODO(tune)" for everything that still needs a
-// real number off the actual robot.
+// real number off the actual robot. Height presets are plain numbers
+// inline in each go_to_*() function below, not up here -- there's only
+// one of each, so there's nothing gained by naming them.
 // ============================================================================
 
-// TODO(tune): motor speed per mm of error, and the cap on that speed.
-constexpr double SEEK_GAIN = 0.6;
+// TODO(tune): motor speed per inch of error, and the cap on that speed.
+constexpr double SEEK_GAIN = 15.0;
 constexpr int SEEK_SPEED = 100;
 
 // TODO(tune): a constant push against gravity, added whenever we're
@@ -44,41 +47,23 @@ constexpr int GRAVITY_HOLD = 15;
 
 constexpr int STICK_DEADBAND = 10;
 
-// TODO(tune): how close (mm) counts as "arrived" for a go_to_*() move,
-// and also how close counts as "touching down" while lowering manually.
-constexpr int ARRIVED_TOLERANCE_MM = 10;
+// TODO(tune): how close (inches) counts as "arrived" for a go_to_*()
+// move, and also how close counts as "touching down" while lowering
+// manually.
+constexpr double ARRIVED_TOLERANCE_IN = 0.4;
 
-// TODO(tune): how far (mm) the lift can drift from its idle-hold target
-// before we correct it. Added after testing showed correcting every
-// single tick made the lift noticeably easy to push by hand -- the
-// motor's own brake mode resists a hand-push a lot harder than a
-// correction every ~20ms does, so below this we just let brake mode
-// hold it and only step in for the slow gravity sag brake mode can't
-// stop alone.
-constexpr int HOLD_DEADBAND_MM = 8;
-
-// A Pin is 6.5in (165mm) tall, 1.6in (40mm) diameter -- official spec,
-// game manual Appendix B ("Pin -"). Pins nest into each other when
-// stacked (<SC2>: "partially or entirely nested"), so the real height
-// one more stacked pin adds is less than its full 165mm -- the manual
-// doesn't publish that overlap as a number. Using the full un-nested
-// height here is a deliberate overshoot (safer to aim a bit high than
-// into the stack) until it's checked against two real nested pins with
-// a ruler.
-constexpr int PIN_LAYER_MM = 165;
-// TODO(tune): margin so the pin drops in without scraping -- not a
-// spec'd number, just an engineering guess.
-constexpr int PLACE_CLEARANCE_MM = 15;
-
-// Measured on the bench 2026-09-27: a Pin sitting inside a Cup is about
-// 10in (254mm) tall as one unit -- taller than a bare Pin since the Cup
-// sits around it. go_to_cup_on_goal() places this whole nested unit, not
-// a bare Pin, so it gets its own clearance number.
-constexpr int CUP_WITH_PIN_MM = 254;
-
-// TODO(tune): just enough to clear the ground and line the preload pin
-// up with a cup's opening while driving to it. Pure guess.
-constexpr int CUP_DROP_CLEARANCE_MM = 180;
+// TODO(tune): how far (degrees, rotation sensor) the lift can drift from
+// its idle-hold target before we correct it, and how hard. Added after
+// testing showed correcting every single tick made the lift noticeably
+// easy to push by hand -- the motor's own brake mode resists a hand-push
+// a lot harder than a correction every ~20ms does, so below this we just
+// let brake mode hold it and only step in for the slow gravity sag brake
+// mode can't stop alone. This used to compare distance-sensor readings
+// instead of rotation degrees -- that sensor's own jitter was enough to
+// look like drift and made the lift randomly correct itself the instant
+// R1/R2 was released, even sitting still.
+constexpr double HOLD_DEADBAND_DEG = 3.0;
+constexpr double HOLD_GAIN = 2.0;
 
 // TODO(tune)/TODO(verify): current (mA) that means the lift just hit
 // something solid. The ceiling threshold is set higher on purpose --
@@ -98,9 +83,9 @@ constexpr int CONTACT_DEBOUNCE_TICKS = 5;
 // STATE
 // ============================================================================
 bool homing = false;
-int target_mm = 0;              // clearance we're homing toward
-bool holding = false;            // idle-hold target has been captured for this hold
-int hold_target_mm = 0;          // clearance captured the instant idle hold engages
+double target_in = 0;            // height we're homing toward
+bool holding = false;             // idle-hold target has been captured for this hold
+double hold_target_deg = 0;       // rotation-sensor degrees, captured the instant idle hold engages
 bool placing_contact = false;    // stopped while lowering (distance close, or current spiked)
 bool at_ceiling = false;         // current-based stop fired while raising
 int contact_high_ticks = 0;
@@ -123,10 +108,8 @@ std::int32_t current_ma() {
   return motor.get_current_draw();
 }
 
-// mm from the claw down to whatever's directly under it. 9999 means the
-// sensor can't see anything solid (out of range).
-std::int32_t claw_distance_mm() {
-  return claw_distance.get();
+double claw_distance_in() {
+  return claw_distance.get() / MM_PER_IN;
 }
 
 bool touched_down() {
@@ -141,66 +124,81 @@ bool is_homing() {
   return homing;
 }
 
-// Reads the distance sensor, rejecting the "nothing there" case (9999)
-// and any error reading. Every homing/holding move goes through this --
-// one place that decides what counts as a real reading.
-bool sensed(int& mm_out) {
-  std::int32_t mm = claw_distance_mm();
+// Reads the distance sensor, rejecting the "nothing there" case and any
+// error reading, and converts straight to inches. Every homing move
+// goes through this -- one place that decides what counts as a real
+// reading.
+bool sensed(double& in_out) {
+  std::int32_t mm = claw_distance.get();
   if (mm <= 0 || mm >= 9999) return false;
-  mm_out = mm;
+  in_out = mm / MM_PER_IN;
   return true;
-}
-
-// Motor speed to close a clearance error of this many mm, gravity-assisted
-// when moving up. Shared by homing and idle hold -- same math either way.
-int seek_speed(int error_mm) {
-  int speed = std::clamp(static_cast<int>(error_mm * SEEK_GAIN), -SEEK_SPEED, SEEK_SPEED);
-  if (speed > 0) speed += GRAVITY_HOLD;
-  return speed;
 }
 
 // ============================================================================
 // PUBLIC CONTROL
-// go_to_height() is the one real move: pass a target in mm and it
+// go_to_height() is the one real move: pass a target in inches and it
 // rises/lowers until the distance sensor reads that. Everything else
 // below is just a named shortcut for a number someone would otherwise
 // have to remember. If the sensor can't see anything, we just don't
 // move -- no guessed fallback height.
 // ============================================================================
 
-void go_to_height(int target_mm_) {
+void go_to_height(double target) {
   homing = true;
   holding = false;
-  target_mm = target_mm_;
+  target_in = target;
 }
 
 void go_to_floor() {
   go_to_height(0);
 }
 
+// Alliance Goal is 3.25in tall (game manual Appendix B) -- guess includes
+// a little clearance on top so the pin drops in without scraping.
+void go_to_alliance_goal() {
+  go_to_height(4.0);
+}
+
+// Neutral (quadrant) Goal is 5.8in tall -- same clearance idea.
+void go_to_neutral_goal() {
+  go_to_height(6.5);
+}
+
+// Center Goal is 8.7in tall -- same clearance idea.
+void go_to_center_goal() {
+  go_to_height(9.5);
+}
+
+// 1st/2nd/3rd pin stacked on whatever Goal you're already at -- all
+// guesses, pace them out against a real stack.
 void go_to_pin_1() {
-  go_to_height(1 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
+  go_to_height(7.1);
 }
 
 void go_to_pin_2() {
-  go_to_height(2 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
+  go_to_height(13.6);
 }
 
 void go_to_pin_3() {
-  go_to_height(3 * PIN_LAYER_MM + PLACE_CLEARANCE_MM);
+  go_to_height(20.1);
 }
 
+// A Pin nested inside a Cup measures ~10in as one unit (bench-measured
+// 2026-09-27) -- a little clearance on top of that.
 void go_to_cup_on_goal() {
-  go_to_height(CUP_WITH_PIN_MM + PLACE_CLEARANCE_MM);
+  go_to_height(10.5);
 }
 
+// Just enough to clear the ground and line the preload pin up with a
+// cup's opening while driving to it -- pure guess.
 void go_to_cup_drop() {
-  go_to_height(CUP_DROP_CLEARANCE_MM);
+  go_to_height(7.0);
 }
 
 void update(int stick) {
-  int mm;
-  bool have_reading = sensed(mm);
+  double in;
+  bool have_reading = sensed(in);
 
   if (std::abs(stick) > STICK_DEADBAND) {
     homing = false;
@@ -210,7 +208,7 @@ void update(int stick) {
       at_ceiling = false;
       ceiling_high_ticks = 0;
 
-      bool distance_close = have_reading && mm <= ARRIVED_TOLERANCE_MM;
+      bool distance_close = have_reading && in <= ARRIVED_TOLERANCE_IN;
       bool current_high = current_ma() > CONTACT_CURRENT_MA;
       contact_high_ticks = current_high ? contact_high_ticks + 1 : 0;
       placing_contact = distance_close || contact_high_ticks >= CONTACT_DEBOUNCE_TICKS;
@@ -245,35 +243,38 @@ void update(int stick) {
   contact_high_ticks = 0;
   ceiling_high_ticks = 0;
 
-  if (!have_reading) {
-    // Nothing to measure against -- stop rather than guess.
-    homing = false;
-    holding = false;
-    motor.move(0);
-    return;
-  }
-
   if (homing) {
-    int error = target_mm - mm;
-    if (std::abs(error) <= ARRIVED_TOLERANCE_MM) {
+    if (!have_reading) {
+      // Nothing to measure against -- stop rather than guess.
       homing = false;
       motor.move(0);
       return;
     }
-    motor.move(seek_speed(error));
+    double error = target_in - in;
+    if (std::fabs(error) <= ARRIVED_TOLERANCE_IN) {
+      homing = false;
+      motor.move(0);
+      return;
+    }
+    int speed = std::clamp(static_cast<int>(error * SEEK_GAIN), -SEEK_SPEED, SEEK_SPEED);
+    if (speed > 0) speed += GRAVITY_HOLD;
+    motor.move(speed);
     return;
   }
 
-  // Idle hold: capture wherever the lift is the instant both buttons are
-  // let go, then mostly leave it to the motor's own brake mode -- only
-  // step in once it's drifted past HOLD_DEADBAND_MM (see that constant).
+  // Idle hold: capture wherever the lift is (rotation-sensor degrees,
+  // not the distance sensor -- see HOLD_DEADBAND_DEG) the instant both
+  // buttons are let go, then mostly leave it to the motor's own brake
+  // mode -- only step in once it's drifted past the deadband.
   if (!holding) {
     holding = true;
-    hold_target_mm = mm;
+    hold_target_deg = position();
   }
-  int drift = hold_target_mm - mm;
-  if (std::abs(drift) > HOLD_DEADBAND_MM) {
-    motor.move(seek_speed(drift));
+  double drift_deg = hold_target_deg - position();
+  if (std::fabs(drift_deg) > HOLD_DEADBAND_DEG) {
+    int speed = std::clamp(static_cast<int>(drift_deg * HOLD_GAIN), -SEEK_SPEED, SEEK_SPEED);
+    if (speed > 0) speed += GRAVITY_HOLD;
+    motor.move(speed);
   } else {
     motor.move(0);
   }

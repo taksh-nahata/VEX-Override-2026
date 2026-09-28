@@ -166,7 +166,7 @@ void anti_tip_corrective_drive() {
 //   Line 1 -- lift current/position, TOUCHED/CEILING status
 //   Line 2 -- IMU pitch/roll (for the anti-tip sign check above)
 //   Line 3 -- toggle target color vs. what the sensor actually sees
-//   Line 4 -- claw distance sensor (mm) -- for tuning against a ruler
+//   Line 4 -- claw distance sensor (in) -- for tuning against a ruler
 // ----------------------------------------------------------------------------
 void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 0, "odom (in): %.2f", horizontal_tracker.get());
@@ -177,7 +177,7 @@ void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 2, "pitch/roll: %.1f / %.1f", chassis.imu.get_pitch(), chassis.imu.get_roll());
   pros::screen::print(TEXT_MEDIUM, 3, "toggle target: %s  sees: %s", toggle::color_name(toggle::target_color()),
                        toggle::color_name(toggle::detect()));
-  pros::screen::print(TEXT_MEDIUM, 4, "claw distance: %d mm", lift::claw_distance_mm());
+  pros::screen::print(TEXT_MEDIUM, 4, "claw distance: %.2f in", lift::claw_distance_in());
 }
 
 // ----------------------------------------------------------------------------
@@ -283,16 +283,16 @@ void opcontrol() {
     // moving. R1/R2 immediately take back manual control if pressed
     // during a preset move (see lift::update()).
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) {
-      lift::go_to_pin_1();
-      master.print(0, 2, "PIN 1");
+      lift::go_to_alliance_goal();
+      master.print(0, 2, "ALLIANCE GOAL");
     }
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
-      lift::go_to_pin_2();
-      master.print(0, 2, "PIN 2");
+      lift::go_to_neutral_goal();
+      master.print(0, 2, "NEUTRAL GOAL");
     }
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
-      lift::go_to_pin_3();
-      master.print(0, 2, "PIN 3");
+      lift::go_to_center_goal();
+      master.print(0, 2, "CENTER GOAL");
     }
     // BENCH TEST -- the other three lift moves, so every height can be
     // checked against a real stack without editing/reflashing code

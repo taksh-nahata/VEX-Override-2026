@@ -5,17 +5,21 @@
 // DR4B lift: 1 motor on the second four-bar, through a 1:6 external
 // reduction. Height control is entirely driven by the claw's distance
 // sensor (points down) -- there's no separate degree/rotation-sensor
-// math involved. In practice this mostly reads distance to the floor,
-// not necessarily whatever's stacked on a goal, so go_to_height() below
-// is really "how high above the ground," not "how far above the current
-// stack." See lift.cpp.
+// math involved for real moves. Everything here is in INCHES, to match
+// the rest of the project (drivetrain, odometry, autons). In practice
+// this sensor mostly reads distance to the floor, not necessarily
+// whatever's stacked on a goal, so every target below is really "how
+// high above the ground," not "how far above the current stack." See
+// lift.cpp.
 namespace lift {
 
 void initialize();
 
 // Height, in degrees, from the rotation sensor. Only used by things
 // OUTSIDE the lift itself (main.cpp's anti-tip, to scale speed by how
-// high the lift is) -- the lift's own control doesn't use this anymore.
+// high the lift is) -- the lift's own control doesn't use this for
+// real moves anymore (it does still use it internally for idle hold --
+// see lift.cpp).
 double position();
 
 // Drives the lift from R1 (+127) / R2 (-127) / neither (0). Call every
@@ -23,18 +27,24 @@ double position();
 void update(int stick);
 
 // The one real move: rises/lowers until the claw distance sensor reads
-// target_mm. Use this directly in autons.cpp for a height that doesn't
-// have its own name below. If the sensor can't see anything, the lift
-// just doesn't move rather than guessing.
-void go_to_height(int target_mm);
+// target_in (inches). Use this directly in autons.cpp for a height that
+// doesn't have its own name below. If the sensor can't see anything,
+// the lift just doesn't move rather than guessing.
+void go_to_height(double target_in);
 
 // Goes to true floor (go_to_height(0)).
 void go_to_floor();
 
-// Presets for the three heights we actually use in a match: the pin
-// going on an empty goal, on a goal with 1 pin already on it, and on a
-// goal with 2. Bound to X/B/A in main.cpp. Tunable numbers are in
-// lift.cpp, tagged TODO(tune).
+// One button per Goal type (Alliance/Neutral/Center all have different
+// heights -- game manual Appendix B) -- the height to place a first pin
+// onto an empty Goal of that type. Bound to X/B/A in main.cpp right now
+// for bench testing. Numbers are guesses in lift.cpp, tagged TODO(tune).
+void go_to_alliance_goal();
+void go_to_neutral_goal();
+void go_to_center_goal();
+
+// The old pin-count presets (1st/2nd/3rd pin stacked on whatever Goal
+// you're already at) -- still used by auton_button_2()'s Loader cycles.
 void go_to_pin_1();
 void go_to_pin_2();
 void go_to_pin_3();
@@ -45,8 +55,7 @@ void go_to_pin_3();
 void go_to_cup_drop();
 
 // Places a whole nested Cup+Pin unit onto the goal -- taller than a
-// bare Pin, so it uses its own clearance number. Used by
-// auton_button_1().
+// bare Pin, so it uses its own height. Used by auton_button_1().
 void go_to_cup_on_goal();
 
 // True while a go_to_*() move is still in progress. The lift only
@@ -60,10 +69,11 @@ bool is_homing();
 // (lift.cpp) against the debug screen.
 std::int32_t current_ma();
 
-// mm from the claw down to whatever's under it (port 6 distance sensor).
-// 9999 means it can't see anything solid. For the debug screen, and for
-// tuning the clearance constants (lift.cpp) against a ruler.
-std::int32_t claw_distance_mm();
+// Inches from the claw down to whatever's under it (port 6 distance
+// sensor). A very large number (roughly 390in+) means it can't see
+// anything solid. For the debug screen, and for tuning the height
+// presets (lift.cpp) against a ruler.
+double claw_distance_in();
 
 // True for the tick(s) right after update() stops a downward move --
 // either the claw distance sensor read close enough to count as arrived
