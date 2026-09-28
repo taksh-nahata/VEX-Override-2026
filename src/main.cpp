@@ -72,6 +72,17 @@ void initialize() {
   chassis.opcontrol_curve_default_set(2.1, 4.3);
   chassis.odom_tracker_back_set(&horizontal_tracker);  // mounted toward the rear of the robot
 
+  // EZ-Template's opcontrol_arcade_standard() has a built-in joystick
+  // curve adjustment feature that defaults to LEFT/RIGHT and Y/A --
+  // supposed to be off unless enabled, but since it's exactly the same
+  // buttons LEFT/RIGHT auton selection uses and gets read every tick
+  // before our own code sees them, explicitly killing it removes any
+  // doubt instead of hoping "off by default" really means it never
+  // touches those buttons at all.
+  chassis.opcontrol_curve_buttons_toggle(false);
+  chassis.opcontrol_curve_buttons_left_set(pros::E_CONTROLLER_DIGITAL_L2, pros::E_CONTROLLER_DIGITAL_L2);
+  chassis.opcontrol_curve_buttons_right_set(pros::E_CONTROLLER_DIGITAL_L2, pros::E_CONTROLLER_DIGITAL_L2);
+
   default_constants();
   chassis.initialize();
 
@@ -286,16 +297,19 @@ void opcontrol() {
   match_clock_reset();
 
   while (true) {
+    // Read LEFT/RIGHT for auton selection before opcontrol_arcade_standard()
+    // runs -- EZ-Template's own curve-adjustment feature defaults to
+    // these same buttons and reads them every tick too (see
+    // initialize()); whichever call sees a new-press first "claims" it,
+    // so ours goes first no matter what.
+    cycle_auton_selection(0);
+
     debug_screen();
     controller_feedback();
     match_clock_update();
     anti_tip_apply();
     chassis.opcontrol_arcade_standard(ez::SPLIT);
     anti_tip_corrective_drive();  // overrides the drive command above if we're actively tipping
-
-    // LEFT/RIGHT also cycle the auton selection here, not just in
-    // disabled() -- see the comment above cycle_auton_selection().
-    cycle_auton_selection(0);
 
     // BENCH TEST ONLY -- runs whatever's selected right now, without
     // needing a competition switch. Never in a real match.
