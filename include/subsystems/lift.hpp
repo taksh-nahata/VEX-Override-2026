@@ -56,7 +56,7 @@ void go_to_cup_drop();
 
 // Places a whole nested Cup+Pin unit onto the goal -- taller than a
 // bare Pin, so it uses its own height. Used by auton_button_1().
-void go_to_cup_on_goal();
+void go_to_pin_on_cup();
 
 // True while a go_to_*() move is still in progress. The lift only
 // actually moves while something calls update() -- unlike the
@@ -72,7 +72,7 @@ std::int32_t current_ma();
 // Inches from the claw down to whatever's under it (port 6 distance
 // sensor). A very large number (roughly 390in+) means it can't see
 // anything solid. For the debug screen, and for tuning the height
-// presets (lift.cpp) against a ruler.
+// presets (lift.cpp) against a ruler
 double claw_distance_in();
 
 // True for the tick(s) right after update() stops a downward move --

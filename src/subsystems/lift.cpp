@@ -173,7 +173,7 @@ void go_to_center_goal() {
 // 1st/2nd/3rd pin stacked on whatever Goal you're already at -- all
 // guesses, pace them out against a real stack.
 void go_to_pin_1() {
-  go_to_height(7.1);
+  go_to_height(9.5);
 }
 
 void go_to_pin_2() {
@@ -186,14 +186,14 @@ void go_to_pin_3() {
 
 // A Pin nested inside a Cup measures ~10in as one unit (bench-measured
 // 2026-09-27) -- a little clearance on top of that.
-void go_to_cup_on_goal() {
-  go_to_height(10.5);
+void go_to_pin_on_cup() {
+  go_to_height(5.3);
 }
 
 // Just enough to clear the ground and line the preload pin up with a
 // cup's opening while driving to it -- pure guess.
 void go_to_cup_drop() {
-  go_to_height(7.0);
+  go_to_height(8.5);
 }
 
 void update(int stick) {

@@ -294,22 +294,6 @@ void opcontrol() {
       lift::go_to_center_goal();
       master.print(0, 2, "CENTER GOAL");
     }
-    // BENCH TEST -- the other three lift moves, so every height can be
-    // checked against a real stack without editing/reflashing code
-    // between tries. Borrows UP (toggle red/blue swap loses its button
-    // until this comes back out).
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
-      lift::go_to_floor();
-      master.print(0, 2, "FLOOR");
-    }
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
-      lift::go_to_cup_drop();
-      master.print(0, 2, "CUP DROP");
-    }
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
-      lift::go_to_cup_on_goal();
-      master.print(0, 2, "CUP ON GOAL");
-    }
 
     // Lift: R1 raises, R2 lowers, that's the whole manual interface.
     if (master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
