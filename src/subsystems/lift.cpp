@@ -22,9 +22,7 @@ namespace lift {
 // rotation-sensor/degree math, no calibration constant. The rotation
 // sensor still exists for position() (main.cpp's anti-tip -- something
 // the distance sensor can't tell you, since it measures clearance to
-// whatever's below, not the arm's own angle) and for idle hold below
-// (it's not noisy the way the distance sensor is, and holding steady
-// doesn't need to know what's on the ground anyway).
+// whatever's below, not the arm's own angle).
 //
 // Plain pros::Motor x2, not pros::MotorGroup -- MotorGroup hit an
 // undefined-reference link error against this project's compiled PROS
@@ -67,19 +65,6 @@ constexpr int STICK_DEADBAND = 10;
 // manually.
 constexpr double ARRIVED_TOLERANCE_IN = 0.4;
 
-// TODO(tune): how far (degrees, rotation sensor) the lift can drift from
-// its idle-hold target before we correct it, and how hard. Added after
-// testing showed correcting every single tick made the lift noticeably
-// easy to push by hand -- the motor's own brake mode resists a hand-push
-// a lot harder than a correction every ~20ms does, so below this we just
-// let brake mode hold it and only step in for the slow gravity sag brake
-// mode can't stop alone. This used to compare distance-sensor readings
-// instead of rotation degrees -- that sensor's own jitter was enough to
-// look like drift and made the lift randomly correct itself the instant
-// R1/R2 was released, even sitting still.
-constexpr double HOLD_DEADBAND_DEG = 3.0;
-constexpr double HOLD_GAIN = 2.0;
-
 // TODO(tune)/TODO(verify): current (mA) that means the lift just hit
 // something solid. The ceiling threshold is set higher on purpose --
 // raising fights gravity and lowering doesn't, so normal raising
@@ -102,8 +87,6 @@ constexpr int CONTACT_DEBOUNCE_TICKS = 5;
 // ============================================================================
 bool homing = false;
 double target_in = 0;            // height we're homing toward
-bool holding = false;             // idle-hold target has been captured for this hold
-double hold_target_deg = 0;       // rotation-sensor degrees, captured the instant idle hold engages
 bool placing_contact = false;    // stopped while lowering (distance close, or current spiked)
 bool at_ceiling = false;         // current-based stop fired while raising
 int contact_high_ticks = 0;
@@ -170,7 +153,6 @@ bool sensed(double& in_out) {
 
 void go_to_height(double target) {
   homing = true;
-  holding = false;
   target_in = target;
 }
 
@@ -226,7 +208,6 @@ void update(int stick) {
 
   if (std::abs(stick) > STICK_DEADBAND) {
     homing = false;
-    holding = false;  // let go of the old hold target -- we'll capture a new one next time it idles
 
     if (stick < 0) {
       at_ceiling = false;
@@ -286,22 +267,16 @@ void update(int stick) {
     return;
   }
 
-  // Idle hold: capture wherever the lift is (rotation-sensor degrees,
-  // not the distance sensor -- see HOLD_DEADBAND_DEG) the instant both
-  // buttons are let go, then mostly leave it to the motor's own brake
-  // mode -- only step in once it's drifted past the deadband.
-  if (!holding) {
-    holding = true;
-    hold_target_deg = position();
-  }
-  double drift_deg = hold_target_deg - position();
-  if (std::fabs(drift_deg) > HOLD_DEADBAND_DEG) {
-    int speed = std::clamp(static_cast<int>(drift_deg * HOLD_GAIN), -SEEK_SPEED, SEEK_SPEED);
-    if (speed > 0) speed += GRAVITY_HOLD;
-    move(speed);
-  } else {
-    move(0);
-  }
+  // Idle hold: just trust the motors' own brake mode (E_MOTOR_BRAKE_HOLD)
+  // to keep position, no active correction on top of it. Used to nudge
+  // the lift back with a small PID-style correction for gravity sag, but
+  // with the 2nd motor added, that correction was strong enough to send
+  // the lift running off in whatever direction it was already moving
+  // instead of holding still -- not worth chasing a new gain for when
+  // brake mode alone might already be plenty with double the torque.
+  // TODO(verify): watch for gravity sag over time now that this is
+  // gone -- if it comes back, this needs a bounded correction again.
+  move(0);
 }
 
 }  // namespace lift

@@ -63,18 +63,25 @@ void run_after_delay(void* param) {
   run_selected();
 }
 
-void on_option_clicked(lv_event_t* e) {
-  auto* opt = static_cast<AutonOption*>(lv_event_get_user_data(e));
-  selected_fn = opt->fn;
-  lv_label_set_text_fmt(status_label, "Selected: %s (runs in 3s if enabled)", opt->label);
-
+// Updates the label text + button highlight to match whatever fn
+// currently is. Shared by on_option_clicked() (a fresh tap) and
+// build_selector() (redrawing after run_selected() -- the selection
+// itself doesn't change, so the screen shouldn't forget it either).
+void show_selection(AutonFn fn, const char* suffix = "") {
   for (int i = 0; i < OPTION_COUNT; i++) {
-    if (options[i].fn == opt->fn) {
+    if (options[i].fn == fn) {
+      lv_label_set_text_fmt(status_label, "Selected: %s%s", options[i].label, suffix);
       lv_obj_set_style_bg_color(option_buttons[i], lv_color_hex(SELECTED_COLOR), 0);
     } else {
       lv_obj_remove_style(option_buttons[i], nullptr, 0);
     }
   }
+}
+
+void on_option_clicked(lv_event_t* e) {
+  auto* opt = static_cast<AutonOption*>(lv_event_get_user_data(e));
+  selected_fn = opt->fn;
+  show_selection(selected_fn, " (runs in 3s if enabled)");
 
   int my_generation = ++generation;
   pros::Task(run_after_delay, reinterpret_cast<void*>(static_cast<std::intptr_t>(my_generation)));
@@ -121,9 +128,9 @@ void build_selector() {
   }
 
   status_label = lv_label_create(scr);
-  lv_label_set_text(status_label, "Selected: Skills");
   lv_obj_set_style_text_color(status_label, lv_color_hex(0xffffff), 0);
   lv_obj_align(status_label, LV_ALIGN_BOTTOM_MID, 0, -10);
+  show_selection(selected_fn);  // keeps whatever was already picked, not always "Skills"
 }
 
 void init() {
@@ -138,6 +145,14 @@ void clear_screen() {
 void run_selected() {
   clear_screen();
   selected_fn();
+  // Rebuild right after -- otherwise the FIRST auton run (real or bench
+  // test) destroys every button/label on screen and never brings them
+  // back, so every tap after that touches objects that don't exist
+  // anymore (silently does nothing, at best). This lets bench testing
+  // run one auton after another without a reboot/reflash in between,
+  // and costs nothing in a real match -- driver control starts right
+  // after, and the driver isn't looking at the brain screen anyway.
+  build_selector();
 }
 
 }  // namespace ui
