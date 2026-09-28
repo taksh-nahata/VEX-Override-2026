@@ -17,10 +17,15 @@ struct AutonOption {
 
 // TODO(missing): auton_skills() (autons.cpp) is still an empty stub --
 // skills is its own game mode with different timing, not planned yet.
+// "Drive Test" (tune_test(), autons.cpp) is a diagnostic, not a real
+// auton -- an isolated 24in drive + 90deg turn, nothing else, for
+// checking whether pid_drive_set()/pid_turn_set() work at all before
+// blaming a whole chained auton.
 AutonOption options[] = {
     {"Cup+Goal", auton_button_1},
     {"Loader x2", auton_button_2},
     {"Skills", auton_skills},
+    {"Drive Test", tune_test},
 };
 constexpr int OPTION_COUNT = sizeof(options) / sizeof(options[0]);
 
@@ -92,11 +97,13 @@ void build_selector() {
   lv_obj_set_style_text_color(title, lv_color_hex(0xffffff), 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 30, 20);
 
-  constexpr int BTN_W = 200, BTN_H = 60, GAP = 20;
+  // Shrunk from 60/20 to fit 4 buttons on the V5's 240px-tall screen
+  // without running into the status label at the bottom.
+  constexpr int BTN_W = 200, BTN_H = 30, GAP = 6, START_Y = 66;
   for (int i = 0; i < OPTION_COUNT; i++) {
     lv_obj_t* btn = lv_btn_create(scr);
     lv_obj_set_size(btn, BTN_W, BTN_H);
-    lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 80 + i * (BTN_H + GAP));
+    lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, START_Y + i * (BTN_H + GAP));
     lv_obj_add_event_cb(btn, on_option_clicked, LV_EVENT_CLICKED, &options[i]);
     option_buttons[i] = btn;
 
