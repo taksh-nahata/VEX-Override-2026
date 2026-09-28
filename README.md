@@ -17,8 +17,8 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 
 ## Project layout
 
-- `src/main.cpp` — chassis setup, driver control, debug screen, anti-tip, match clock.
-- `src/subsystems/` — lift, claw, toggle spinner (one file each).
+- `src/main.cpp` — chassis setup, driver control, auton selection, debug screen, anti-tip, match clock.
+- `src/subsystems/` — lift, claw, toggle spinner (one file each). Toggle spinner + color sensor are off the robot for now (team's call) — the code's still there, just unused.
 - `src/autons.cpp` — PID/slew constants, autonomous routines, PID tuner + calibration test moves.
 - `src/sdlog.cpp` — background SD card logging (`/usd/log.csv`).
 - `include/globals.hpp` — every motor/sensor port and spin direction in one place.
@@ -28,25 +28,23 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 
 - **R1 / R2** — lift up / down (manual). Pressing either always takes back control from a height preset below.
 - **X / B / A** — send the lift to the Alliance / Neutral / Center Goal height preset (each Goal type is a different height). Prints which one you picked to the controller screen.
+- **LEFT / RIGHT** — cycle the auton selection (see below).
+- **DOWN** (driver control only) — bench-test the current auton selection right now, no competition switch needed. Never used in a real match.
 - **L1** — toggle claw open/closed.
-- **L2** (hold) — spin the toggle wheel toward the current target color; stops automatically on reaching it.
-- **UP** — swap the toggle target between red/blue. **Y** — set it to yellow. Shown on the controller screen.
 
-`calibrate_straight()`/`calibrate_spin()` (drivetrain/odometry calibration, `autons.cpp`) aren't wired to a button right now. Ask if you want them back on the controller for more drivetrain tuning.
+UP, Y, and L2 are free right now (used to be toggle spinner controls). `calibrate_straight()`/`calibrate_spin()` (drivetrain/odometry calibration, `autons.cpp`) also aren't wired to a button.
 
 ## Picking an auton
 
-Plain controller buttons, no brain screen involved at all — we tried a custom LVGL logo/button screen (real header/library bugs, then a screen that stopped responding after running once), then EZ-Template's own built-in LLEMU selector (which crashed the brain with a data abort), so this avoids every screen API entirely.
+Plain controller buttons, no brain screen involved at all — we tried a custom LVGL logo/button screen (real header/library bugs, then a screen that stopped responding after running once), then EZ-Template's own built-in LLEMU selector (which crashed the brain with a data abort), so this avoids every screen-drawing API entirely.
 
-**While the robot is disabled** (before a match starts, or any time it isn't in autonomous/driver control): **X** = Cup+Goal, **B** = Loader x2, **A** = Skills, **Y** = Drive Test. Whatever's picked prints to the controller screen (`Auton: ...`), which is what the driver's actually looking at anyway.
-
-For bench testing without a competition switch: once enabled, hold **DOWN** during driver control to run whatever's currently selected, right now. Never used in an actual match.
+Press **LEFT/RIGHT** to cycle through the options (Cup+Goal, Loader x2, Skills, Drive Test) — works both while the robot is disabled (the normal pre-match state) and during driver control, since without a competition switch the robot may never sit in "disabled" long enough to pick anything there. Whatever's selected prints to the controller screen (`Auton: ...`), which is what the driver's actually looking at anyway. Hold **DOWN** during driver control to run it immediately for bench testing.
 
 ## Hardware status
 
 Ports are confirmed and in `globals.hpp`. Still open:
-- All PID gains (`autons.cpp`, `lift.cpp`) and the toggle color sensor's hue thresholds (`toggle.cpp`) — need tuning against the real robot/toggles.
-- The three lift height presets (`PIN_1/2/3_HEIGHT_DEG` in `lift.cpp`) are placeholder guesses — press each button and adjust against the real stack heights.
+- All PID gains (`autons.cpp`, `lift.cpp`) — need tuning against the real robot.
+- The lift height presets (`lift.cpp`) are placeholder guesses — press each button and adjust against the real Goals/stacks.
 - Anti-tip constants in `main.cpp` (tip angle/rate, max lift height, correction direction) — unverified, test carefully before relying on them.
 - The lift must be powered on with it all the way down at true floor every time — `position()` zeros to wherever it physically is at boot, not a fixed reference.
 

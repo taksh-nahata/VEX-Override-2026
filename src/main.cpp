@@ -25,19 +25,45 @@ ez::Drive chassis(
 ez::tracking_wheel horizontal_tracker(PORT_ODOM_HORIZONTAL, ODOM_HORIZONTAL_WHEEL_DIAMETER, ODOM_HORIZONTAL_OFFSET);
 
 // ----------------------------------------------------------------------------
-// AUTON SELECTION -- plain controller buttons during the disabled
-// (pre-match) period, no screen library involved at all. We tried a
-// custom LVGL selector (a real header/library version mismatch, then a
-// screen that stopped responding after running once), then EZ-Template's
-// own LLEMU-based selector (which produced a hard data abort crash on
-// this robot) -- rather than debug a low-level memory fault blind a
-// third time, this avoids every screen API entirely. What's picked shows
-// on the controller screen instead, which is what the driver actually
-// looks at anyway, not the brain screen.
+// AUTON SELECTION -- plain controller buttons, no screen library involved
+// at all. We tried a custom LVGL selector (a real header/library version
+// mismatch, then a screen that stopped responding after running once),
+// then EZ-Template's own LLEMU-based selector (a hard data abort crash)
+// -- this avoids every screen-drawing API entirely.
+//
+// LEFT/RIGHT cycle through the list -- not X/B/A/Y, and not only inside
+// disabled(). Without a competition switch, disabled() may never get
+// real runtime at all (the robot likely goes straight to driver control),
+// so relying on it alone means the selector might never actually be
+// interactable. cycle_auton_selection() runs from both disabled() (the
+// correct place for a real match, where it DOES get real runtime) and
+// opcontrol() (so bench testing without a switch still works), and
+// both read/write the exact same selection.
 // ----------------------------------------------------------------------------
 using AutonFn = void (*)();
-AutonFn selected_auton = auton_skills;
-const char* selected_auton_name = "Skills";
+struct AutonOption {
+  const char* name;
+  AutonFn fn;
+};
+AutonOption auton_options[] = {
+    {"Cup+Goal", auton_button_1},
+    {"Loader x2", auton_button_2},
+    {"Skills", auton_skills},
+    {"Drive Test", tune_test},
+};
+constexpr int AUTON_COUNT = sizeof(auton_options) / sizeof(auton_options[0]);
+int auton_index = 2;  // defaults to Skills
+
+void cycle_auton_selection(int line) {
+  if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_LEFT)) {
+    auton_index = (auton_index - 1 + AUTON_COUNT) % AUTON_COUNT;
+    master.print(0, line, "Auton: %-11s", auton_options[auton_index].name);
+  }
+  if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)) {
+    auton_index = (auton_index + 1) % AUTON_COUNT;
+    master.print(0, line, "Auton: %-11s", auton_options[auton_index].name);
+  }
+}
 
 // ----------------------------------------------------------------------------
 // INITIALIZATION
@@ -50,29 +76,18 @@ void initialize() {
   chassis.initialize();
 
   lift::initialize();
-  toggle::initialize();
+  // toggle::initialize() -- toggle spinner + color sensor pulled off the
+  // robot for now (team's call, hardware in flux). toggle.cpp/hpp still
+  // exist, just unused, so this is a one-line add-back whenever it's on
+  // the robot again.
   sdlog::start();  // background SD card logging, see sdlog.hpp
+
+  master.print(0, 0, "Auton: %-11s", auton_options[auton_index].name);
 }
 
-// X/B/A/Y pick an auton while the robot is disabled (pre-match) -- same
-// buttons used for lift presets in opcontrol(), but that's fine, nothing
-// lift-related should be happening while disabled anyway.
 void disabled() {
   while (true) {
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)) {
-      selected_auton = auton_button_1;
-      selected_auton_name = "Cup+Goal";
-    } else if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)) {
-      selected_auton = auton_button_2;
-      selected_auton_name = "Loader x2";
-    } else if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
-      selected_auton = auton_skills;
-      selected_auton_name = "Skills";
-    } else if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)) {
-      selected_auton = tune_test;
-      selected_auton_name = "Drive Test";
-    }
-    master.print(0, 0, "Auton: %-11s", selected_auton_name);
+    cycle_auton_selection(0);
     pros::delay(50);
   }
 }
@@ -86,7 +101,7 @@ void autonomous() {
   chassis.pid_targets_reset();
   chassis.drive_sensor_reset();
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_HOLD);
-  selected_auton();
+  auton_options[auton_index].fn();
 }
 
 // ----------------------------------------------------------------------------
@@ -198,8 +213,9 @@ void anti_tip_corrective_drive() {
 //   Line 0 -- odometry (push the robot right, the number should go up)
 //   Line 1 -- lift current/position, TOUCHED/CEILING status
 //   Line 2 -- IMU pitch/roll (for the anti-tip sign check above)
-//   Line 3 -- toggle target color vs. what the sensor actually sees
-//   Line 4 -- claw distance sensor (in) -- for tuning against a ruler
+//   Line 3 -- claw distance sensor (in) -- for tuning against a ruler
+// (toggle target/sees line removed -- toggle spinner + color sensor are
+// off the robot for now)
 // ----------------------------------------------------------------------------
 void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 0, "odom (in): %.2f", horizontal_tracker.get());
@@ -208,9 +224,7 @@ void debug_screen() {
   pros::screen::print(TEXT_MEDIUM, 1, "lift mA: %d  pos: %.1f  %s", lift::current_ma(), lift::position(), lift_status);
 
   pros::screen::print(TEXT_MEDIUM, 2, "pitch/roll: %.1f / %.1f", chassis.imu.get_pitch(), chassis.imu.get_roll());
-  pros::screen::print(TEXT_MEDIUM, 3, "toggle target: %s  sees: %s", toggle::color_name(toggle::target_color()),
-                       toggle::color_name(toggle::detect()));
-  pros::screen::print(TEXT_MEDIUM, 4, "claw distance: %.2f in", lift::claw_distance_in());
+  pros::screen::print(TEXT_MEDIUM, 3, "claw distance: %.2f in", lift::claw_distance_in());
 }
 
 // ----------------------------------------------------------------------------
@@ -225,8 +239,6 @@ void debug_screen() {
 void controller_feedback() {
   static bool was_touched = false;
   static bool was_ceiling = false;
-  static bool was_on_target = false;
-  static toggle::Color shown_target = toggle::Color::NONE;  // forces the very first print
 
   bool touched = lift::touched_down();
   if (touched && !was_touched) master.rumble(".");
@@ -235,19 +247,6 @@ void controller_feedback() {
   bool at_ceiling = lift::at_ceiling_now();
   if (at_ceiling && !was_ceiling) master.rumble("..");
   was_ceiling = at_ceiling;
-
-  bool on_target = toggle::detect() == toggle::target_color();
-  if (on_target && !was_on_target) master.rumble("-");
-  was_on_target = on_target;
-
-  // Line 0 always shows the current toggle target, not just for a moment
-  // right after UP/Y is pressed -- a driver told us they couldn't tell
-  // what was selected mid-match, so now it's just always there.
-  toggle::Color current_target = toggle::target_color();
-  if (current_target != shown_target) {
-    master.print(0, 0, "target: %-6s", toggle::color_name(current_target));
-    shown_target = current_target;
-  }
 }
 
 // ----------------------------------------------------------------------------
@@ -275,7 +274,7 @@ void match_clock_update() {
   if (!endgame_warned && elapsed >= MATCH_DURATION_MS - ENDGAME_WARNING_MS) {
     endgame_warned = true;
     master.rumble("- - -");
-    master.print(0, 1, "ENDGAME: MIDFIELD");  // line 1 -- line 0 is the toggle target
+    master.print(0, 1, "ENDGAME: MIDFIELD");  // line 1 -- line 0 is the auton selection
   }
 }
 
@@ -283,13 +282,6 @@ void match_clock_update() {
 // DRIVER CONTROL
 // ----------------------------------------------------------------------------
 void opcontrol() {
-  // Used to unconditionally clear the selector screen here too, on the
-  // assumption that autonomous() always runs first and already did it --
-  // true in a real match (competition switch/field control), but not
-  // when bench-testing without one, where opcontrol() can start directly
-  // and this was wiping the selector before anyone got to press a
-  // button. Leaving the screen alone here costs nothing in a real match
-  // (already cleared by run_selected() by the time we get here).
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_COAST);
   match_clock_reset();
 
@@ -301,25 +293,19 @@ void opcontrol() {
     chassis.opcontrol_arcade_standard(ez::SPLIT);
     anti_tip_corrective_drive();  // overrides the drive command above if we're actively tipping
 
-    // BENCH TEST ONLY -- runs whatever's selected (see disabled()) right
-    // now, without needing a competition switch. Never in a real match.
+    // LEFT/RIGHT also cycle the auton selection here, not just in
+    // disabled() -- see the comment above cycle_auton_selection().
+    cycle_auton_selection(0);
+
+    // BENCH TEST ONLY -- runs whatever's selected right now, without
+    // needing a competition switch. Never in a real match.
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
       master.print(0, 2, "RUNNING AUTON");
-      selected_auton();
+      auton_options[auton_index].fn();
     }
 
     // Claw
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) claw::toggle();
-
-    // Toggle target color -- UP swaps between red and blue, Y jumps
-    // straight to yellow. What's picked shows up on the controller screen
-    // (controller_feedback() above), so the driver always knows.
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
-      toggle::toggle_target_red_blue();
-    }
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)) {
-      toggle::set_target_yellow();
-    }
 
     // Lift height presets -- one button per height, so the driver doesn't
     // have to eyeball a height with R1/R2 every cycle. Each prints which
@@ -348,15 +334,7 @@ void opcontrol() {
       lift::update(0);
     }
 
-    // Toggle spinner -- spins while L2 is held, but also stops itself the
-    // moment it reaches the target color. TODO(tune): the hue thresholds
-    // in toggle.cpp are still guesses, so this won't reliably stop on the
-    // real colors until we calibrate against the actual sensor and toggle.
-    if (master.get_digital(pros::E_CONTROLLER_DIGITAL_L2) && toggle::detect() != toggle::target_color()) {
-      toggle::spin(127);
-    } else {
-      toggle::spin(0);
-    }
+    // L2 -- toggle spinner is off the robot for now, so this is free.
 
     pros::delay(ez::util::DELAY_TIME);
   }
