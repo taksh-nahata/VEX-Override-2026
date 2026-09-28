@@ -26,8 +26,14 @@ ez::tracking_wheel horizontal_tracker(PORT_ODOM_HORIZONTAL, ODOM_HORIZONTAL_WHEE
 
 // ----------------------------------------------------------------------------
 // INITIALIZATION
-// ui::init() (src/ui.cpp) owns the whole screen: our logo, then a
-// button-based auton picker instead of EZ-Template's default one.
+// Auton picking uses EZ-Template's own stock selector (LLEMU 3-button
+// screen + SD card) instead of a custom LVGL one -- we had a custom
+// button/logo screen for a while, but chased down enough LVGL-specific
+// bugs (a real header/library version mismatch, then a screen that
+// never rebuilt after running once) that it wasn't worth maintaining
+// over the plain, already-proven mechanism EZ-Template ships with.
+// Holding B and DOWN in driver control runs the selected auton without
+// a competition switch (built into EZ-Template, no code needed here).
 // ----------------------------------------------------------------------------
 void initialize() {
   chassis.opcontrol_curve_default_set(2.1, 4.3);
@@ -40,7 +46,13 @@ void initialize() {
   toggle::initialize();
   sdlog::start();  // background SD card logging, see sdlog.hpp
 
-  ui::init();
+  ez::as::auton_selector.autons_add({
+      {"Cup+Goal", auton_button_1},
+      {"Loader x2", auton_button_2},
+      {"Skills", auton_skills},
+      {"Drive Test", tune_test},
+  });
+  ez::as::initialize();
 }
 
 void disabled() {}
@@ -53,7 +65,7 @@ void autonomous() {
   chassis.pid_targets_reset();
   chassis.drive_sensor_reset();
   chassis.drive_brake_set(pros::E_MOTOR_BRAKE_HOLD);
-  ui::run_selected();
+  ez::as::auton_selector.selected_auton_call();
 }
 
 // ----------------------------------------------------------------------------
@@ -271,8 +283,12 @@ void opcontrol() {
     // Claw
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) claw::toggle();
 
-    // Toggle target color -- Y jumps straight to yellow. UP is borrowed
-    // below (bench test), so red/blue swap has no button right now.
+    // Toggle target color -- UP swaps between red and blue, Y jumps
+    // straight to yellow. What's picked shows up on the controller screen
+    // (controller_feedback() above), so the driver always knows.
+    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP)) {
+      toggle::toggle_target_red_blue();
+    }
     if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)) {
       toggle::set_target_yellow();
     }

@@ -20,7 +20,6 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 - `src/main.cpp` — chassis setup, driver control, debug screen, anti-tip, match clock.
 - `src/subsystems/` — lift, claw, toggle spinner (one file each).
 - `src/autons.cpp` — PID/slew constants, autonomous routines, PID tuner + calibration test moves.
-- `src/ui.cpp` — boot splash + on-screen auton selector (LVGL).
 - `src/sdlog.cpp` — background SD card logging (`/usd/log.csv`).
 - `include/globals.hpp` — every motor/sensor port and spin direction in one place.
 - `TODO.md` — plain-language status/what's-left, no coding background needed to read it.
@@ -28,18 +27,20 @@ No prior PROS/VEX coding experience needed to get this far — steps 1-2 are one
 ## Controls
 
 - **R1 / R2** — lift up / down (manual). Pressing either always takes back control from a height preset below.
-- **X / B / A** — send the lift to the Pin 1 / Pin 2 / Pin 3 height preset (the pin going onto an empty goal / a goal with 1 pin / a goal with 2). Prints which one you picked to the controller screen.
+- **X / B / A** — send the lift to the Alliance / Neutral / Center Goal height preset (each Goal type is a different height). Prints which one you picked to the controller screen.
 - **L1** — toggle claw open/closed.
 - **L2** (hold) — spin the toggle wheel toward the current target color; stops automatically on reaching it.
 - **UP** — swap the toggle target between red/blue. **Y** — set it to yellow. Shown on the controller screen.
 
-The drivetrain PID tuner and the drivetrain/odometry calibration test moves are still in `autons.cpp` (`tune_test()`, `calibrate_straight()`, `calibrate_spin()`) but not currently wired to any button — we freed up X/B/A/LEFT for the lift presets above. Ask if you want them back on the controller for more drivetrain tuning.
+`calibrate_straight()`/`calibrate_spin()` (drivetrain/odometry calibration, `autons.cpp`) aren't wired to a button right now. Ask if you want them back on the controller for more drivetrain tuning.
 
 ## Picking an auton
 
-At boot, the brain screen shows our logo then 3 buttons (Cup+Goal / Loader x2 / Skills) plus a "Selected: ..." label — tap one on the physical screen to choose it. That selection is what runs once a real autonomous period starts (competition switch/field control at an event).
+This uses EZ-Template's own built-in selector (LLEMU 3-button screen + SD card), not custom code — we tried a custom LVGL logo/button screen for a while, but it kept surfacing LVGL-specific bugs (a real header/library version mismatch, then a screen that didn't rebuild after running once) that weren't worth maintaining over the plain, already-proven mechanism EZ-Template ships with.
 
-For bench testing without a competition switch: tapping a button also runs it 3 seconds later, but only if the robot is actually enabled (in driver control) at that moment — tapping during the normal pre-match disabled wait does nothing on its own, same as at a real event. Tap a different button within those 3 seconds to cancel and pick something else instead.
+At boot, use the brain screen's left/right buttons to page through the 4 options (Cup+Goal, Loader x2, Skills, Drive Test) and the center button to select. Your choice is saved to the SD card and survives a power cycle. That selection is what runs once a real autonomous period starts (competition switch/field control at an event).
+
+For bench testing without a competition switch: hold **B and DOWN together** during driver control to run whatever's currently selected, right now (built into EZ-Template, version 3.1.0+).
 
 ## Hardware status
 
