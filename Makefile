@@ -13,8 +13,10 @@ SRCDIR=$(ROOT)/src
 INCDIR=$(ROOT)/include
 
 WARNFLAGS+=
-EXTRA_CFLAGS=
-EXTRA_CXXFLAGS=-Wno-deprecated-enum-enum-conversion
+# -g0 turns off debug info (common.mk adds -g by default). The V5 has no
+# debugger attached to it, so it only made objects bigger and rebuilds slower.
+EXTRA_CFLAGS=-g0
+EXTRA_CXXFLAGS=-g0 -Wno-deprecated-enum-enum-conversion
 
 # Set to 1 to enable hot/cold linking
 USE_PACKAGE:=1
@@ -46,3 +48,18 @@ MAKEFLAGS+=-j8
 ################################################################################
 ########## Nothing below this line should be edited by typical users ###########
 -include ./common.mk
+
+# common.mk defines the color/status strings with a plain `=` around
+# $(shell printf ...), so make spawns a new shell process every time one is
+# used -- a couple dozen per build, and process spawns are slow on Windows.
+# Re-assigning them with := evaluates each once (~2s faster per build).
+# Order matters: colors first, then the strings built from them.
+NO_COLOR    := $(NO_COLOR)
+OK_COLOR    := $(OK_COLOR)
+ERROR_COLOR := $(ERROR_COLOR)
+WARN_COLOR  := $(WARN_COLOR)
+STEP_COLOR  := $(STEP_COLOR)
+OK_STRING    := $(OK_STRING)
+DONE_STRING  := $(DONE_STRING)
+ERROR_STRING := $(ERROR_STRING)
+WARN_STRING  := $(WARN_STRING)

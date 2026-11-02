@@ -38,7 +38,9 @@ UP, Y, and L2 are free right now (used to be toggle spinner controls). `calibrat
 
 Plain controller buttons, no brain screen involved at all — we tried a custom LVGL logo/button screen (real header/library bugs, then a screen that stopped responding after running once), then EZ-Template's own built-in LLEMU selector (which crashed the brain with a data abort), so this avoids every screen-drawing API entirely.
 
-Press **LEFT/RIGHT** to cycle through the options (Cup+Goal, Loader x2, Skills, Drive Test) — works both while the robot is disabled (the normal pre-match state) and during driver control, since without a competition switch the robot may never sit in "disabled" long enough to pick anything there. Whatever's selected prints to the controller screen (`Auton: ...`), which is what the driver's actually looking at anyway. Hold **DOWN** during driver control to run it immediately for bench testing.
+Press **LEFT/RIGHT** to cycle through the options (Cup+Goal R, Cup+Goal L, Drive Test) — works both while the robot is disabled (the normal pre-match state) and during driver control, since without a competition switch the robot may never sit in "disabled" long enough to pick anything there. Whatever's selected prints to the controller screen (`Auton: ...`), which is what the driver's actually looking at anyway. Hold **DOWN** during driver control to run it immediately for bench testing.
+
+Cup+Goal R is the original route to the robot's starting-right; Cup+Goal L is its reflected starting-left route.
 
 ## Hardware status
 

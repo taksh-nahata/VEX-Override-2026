@@ -1,6 +1,4 @@
-// Doesn't touch EZ-Template/chassis, so skip main.h's heavy include chain
-// (drive.hpp, <bits/stdc++.h> via EZ-Template/util.hpp) to keep this file's
-// compile time down.
+// Plain PROS API only -- main.h's EZ-Template includes are slow to compile.
 #include "api.h"
 #include "globals.hpp"
 #include "subsystems/claw.hpp"

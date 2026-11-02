@@ -1,7 +1,4 @@
-// Only needs the plain PROS API, not the rest of EZ-Template
-// (chassis/drive.hpp is by far the biggest header in this project) or
-// main.h's other includes, so we only pull in what this file actually
-// uses to keep compile time down.
+// Only the plain PROS API here -- main.h's EZ-Template includes are slow to compile.
 #include "api.h"
 #include "globals.hpp"
 #include "subsystems/lift.hpp"
@@ -11,272 +8,113 @@
 
 namespace lift {
 
-// ============================================================================
-// HARDWARE
-// 2 motors on the second four-bar (1:6 external reduction), sharing one
-// physical shaft -- not separate gearing per side like the old crooked
-// 2-motor lift, so these two can't get out of sync with each other.
-// move()/brake_both()/current_ma() below just command/read both. Real
-// moves (go_to_height() and everything built on it) are driven entirely
-// by the claw distance sensor, converted straight to inches -- no
-// rotation-sensor/degree math, no calibration constant. The rotation
-// sensor still exists for position() (main.cpp's anti-tip -- something
-// the distance sensor can't tell you, since it measures clearance to
-// whatever's below, not the arm's own angle).
-//
-// Plain pros::Motor x2, not pros::MotorGroup -- MotorGroup hit an
-// undefined-reference link error against this project's compiled PROS
-// library (pros::rtos::Mutex), the same class of header/library
-// mismatch that bit LVGL earlier this project. Two motors moved
-// together needs nothing fancier than calling the same thing on both.
-// ============================================================================
+// Two motors on one shaft, always commanded the same. Plain pros::Motor, not
+// MotorGroup (MotorGroup gave a link error against this project's PROS library).
 pros::Motor motor(PORT_LIFT, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Motor motor_2(PORT_LIFT_2, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
-pros::Rotation rotation(PORT_LIFT_ROTATION);
-pros::Distance claw_distance(PORT_CLAW_DISTANCE);
+pros::Rotation rotation(PORT_LIFT_ROTATION);  // only for position() (anti-tip)
+pros::Distance claw_distance(PORT_CLAW_DISTANCE);  // height comes from this
 
-void move(int voltage) {
-  motor.move(voltage);
-  motor_2.move(voltage);
-}
+// TODO(tune)
+constexpr double SEEK_GAIN = 15.0;   // motor speed per inch of error
+constexpr int SEEK_SPEED = 100;      // max speed while seeking
+constexpr int GRAVITY_HOLD = 15;     // extra push when going up
+constexpr double TOLERANCE_IN = 0.4; // close enough to the target / the floor
 
-constexpr double MM_PER_IN = 25.4;
+bool homing = false;  // true while a go_to_*() move is running
+double target_in = 0;
 
-// ============================================================================
-// TUNABLE CONSTANTS — grep "TODO(tune)" for everything that still needs a
-// real number off the actual robot. Height presets are plain numbers
-// inline in each go_to_*() function below, not up here -- there's only
-// one of each, so there's nothing gained by naming them.
-// ============================================================================
-
-// TODO(tune): motor speed per inch of error, and the cap on that speed.
-constexpr double SEEK_GAIN = 15.0;
-constexpr int SEEK_SPEED = 100;
-
-// TODO(tune): a constant push against gravity, added whenever we're
-// commanding the lift upward, so the speed above only has to correct
-// leftover error instead of fighting the same predictable sag every tick.
-constexpr int GRAVITY_HOLD = 15;
-
-constexpr int STICK_DEADBAND = 10;
-
-// TODO(tune): how close (inches) counts as "arrived" for a go_to_*()
-// move, and also how close counts as "touching down" while lowering
-// manually.
-constexpr double ARRIVED_TOLERANCE_IN = 0.4;
-
-// TODO(tune)/TODO(verify): current (mA) that means the lift just hit
-// something solid. The ceiling threshold is set higher on purpose --
-// raising fights gravity and lowering doesn't, so normal raising
-// current runs higher than normal lowering current even with nothing
-// in the way. These were tuned for a single motor -- with the load now
-// split across two motors on the same shaft, one motor's current for
-// the same stall could look different, so re-check both against the
-// debug screen's live mA reading.
-constexpr std::int32_t CONTACT_CURRENT_MA = 1500;
-constexpr std::int32_t CEILING_CURRENT_MA = 2200;
-
-// How many ticks in a row current has to stay high before we actually
-// call it a contact stop. Every motor gives a brief current spike just
-// from starting to move under load, and without this debounce that
-// spike alone would trip a false stop the instant R1/R2 is pressed.
-constexpr int CONTACT_DEBOUNCE_TICKS = 5;
-
-// ============================================================================
-// STATE
-// ============================================================================
-bool homing = false;
-double target_in = 0;            // height we're homing toward
-bool placing_contact = false;    // stopped while lowering (distance close, or current spiked)
-bool at_ceiling = false;         // current-based stop fired while raising
-int contact_high_ticks = 0;
-int ceiling_high_ticks = 0;
-
-// ============================================================================
-// QUERIES
-// ============================================================================
 
 void initialize() {
   motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   motor_2.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  rotation.reset_position();
+  // No reset here: raw_angle() is absolute, so it's the same no matter where the lift boots.
+}
+
+// TODO(measure): lift all the way down, read "raw" on the brain (line 1), put it here.
+constexpr double LIFT_BOTTOM_DEG = 244.2;  // measured 2026-10-18
+
+double raw_angle() {
+  return rotation.get_angle() / 100.0;  // absolute 0-360, centidegrees -> degrees
 }
 
 double position() {
-  return rotation.get_position() / 100.0;  // sensor reports centidegrees
+  double deg = LIFT_BOTTOM_DEG - raw_angle();  // degrees above the bottom (raw goes DOWN as the lift goes up)
+  if (deg > 180) deg -= 360;  // in case the sensor's 0/360 point falls inside the lift's travel
+  if (deg < -180) deg += 360;
+  return deg;
 }
 
-// Just the first motor's current (MotorGroup::get_current_draw()
-// defaults to index 0) -- fine since both motors are rigidly on the
-// same shaft and share the load, but a stall now splits its current
-// across two motors instead of one, so CONTACT_CURRENT_MA/
-// CEILING_CURRENT_MA below may read differently than they used to.
+// Hard limits, in "pos" degrees (0 = bottom, ~103 = physical top). Every motor command
+// goes through here, so nothing (R1/R2, presets) can push past them.
+constexpr double LIFT_MIN_DEG = 0;
+constexpr double LIFT_MAX_DEG = 100;
+// TODO(tune): momentum carries the lift past a limit, so it slows down over the last
+// SLOW_ZONE_DEG before one: max speed shrinks to 0 at the limit, never below CREEP.
+constexpr double SLOW_ZONE_DEG = 30;
+constexpr int CREEP = 25;
+
+void move(int voltage) {
+  double raw = raw_angle();
+  if (raw <= 360) {  // a failed sensor read is huge -- then don't limit on garbage
+    double pos = position();
+    double left = voltage > 0 ? LIFT_MAX_DEG - pos : pos - LIFT_MIN_DEG;  // degrees to the limit ahead
+    if (voltage != 0) {
+      if (left <= 0) voltage = 0;
+      else if (left < SLOW_ZONE_DEG) {
+        int cap = std::max(CREEP, static_cast<int>(127 * left / SLOW_ZONE_DEG));
+        voltage = std::clamp(voltage, -cap, cap);
+      }
+    }
+  }
+  motor.move(voltage);
+  motor_2.move(voltage);
+}
+
 std::int32_t current_ma() {
   return motor.get_current_draw();
 }
 
 double claw_distance_in() {
-  return claw_distance.get() / MM_PER_IN;
-}
-
-bool touched_down() {
-  return placing_contact;
-}
-
-bool at_ceiling_now() {
-  return at_ceiling;
+  return claw_distance.get() / 25.4;
 }
 
 bool is_homing() {
   return homing;
 }
 
-// Reads the distance sensor, rejecting the "nothing there" case and any
-// error reading, and converts straight to inches. Every homing move
-// goes through this -- one place that decides what counts as a real
-// reading.
-bool sensed(double& in_out) {
-  std::int32_t mm = claw_distance.get();
-  if (mm <= 0 || mm >= 9999) return false;
-  in_out = mm / MM_PER_IN;
-  return true;
-}
-
-// ============================================================================
-// PUBLIC CONTROL
-// go_to_height() is the one real move: pass a target in inches and it
-// rises/lowers until the distance sensor reads that. Everything else
-// below is just a named shortcut for a number someone would otherwise
-// have to remember. If the sensor can't see anything, we just don't
-// move -- no guessed fallback height.
-// ============================================================================
-
-void go_to_height(double target) {
+// Only sets the target -- update() does the moving.
+void go_to_height(double inches) {
+  target_in = inches;
   homing = true;
-  target_in = target;
 }
 
-void go_to_floor() {
-  go_to_height(0);
-}
+void go_to_cup_and_pin() { go_to_height(4.3); }
 
-// Alliance Goal is 3.25in tall (game manual Appendix B) -- guess includes
-// a little clearance on top so the pin drops in without scraping.
-void go_to_alliance_goal() {
-  go_to_height(4.0);
-}
-
-// Neutral (quadrant) Goal is 5.8in tall -- same clearance idea.
-void go_to_neutral_goal() {
-  go_to_height(6.5);
-}
-
-// Center Goal is 8.7in tall -- same clearance idea.
-void go_to_center_goal() {
-  go_to_height(9.5);
-}
-
-// 1st/2nd/3rd pin stacked on whatever Goal you're already at -- all
-// guesses, pace them out against a real stack.
-void go_to_pin_1() {
-  go_to_height(9.5);
-}
-
-void go_to_pin_2() {
-  go_to_height(13.6);
-}
-
-void go_to_pin_3() {
-  go_to_height(20.1);
-}
-
-// A Pin nested inside a Cup measures ~10in as one unit (bench-measured
-// 2026-09-27) -- a little clearance on top of that.
-void go_to_pin_on_cup() {
-  go_to_height(5.3);
-}
-
-// Just enough to clear the ground and line the preload pin up with a
-// cup's opening while driving to it -- pure guess.
-void go_to_cup_drop() {
-  go_to_height(8.5);
-}
-
+// Call every loop. stick is +127 (up), -127 (down) or 0.
 void update(int stick) {
-  double in;
-  bool have_reading = sensed(in);
+  int mm = claw_distance.get();
+  bool sees_something = mm > 0 && mm < 9999;  // 9999 = nothing in range
+  double height_in = mm / 25.4;
 
-  if (std::abs(stick) > STICK_DEADBAND) {
+  if (std::abs(stick) > 10) {  // driver is pushing: cancel any preset
     homing = false;
-
-    if (stick < 0) {
-      at_ceiling = false;
-      ceiling_high_ticks = 0;
-
-      bool distance_close = have_reading && in <= ARRIVED_TOLERANCE_IN;
-      bool current_high = current_ma() > CONTACT_CURRENT_MA;
-      contact_high_ticks = current_high ? contact_high_ticks + 1 : 0;
-      placing_contact = distance_close || contact_high_ticks >= CONTACT_DEBOUNCE_TICKS;
-      if (placing_contact) {
-        // True stop -- doesn't open the claw. Dropping a pin can't be
-        // undone, so that's still a deliberate, separate button press.
-        move(0);
-        return;
-      }
-    } else {
-      placing_contact = false;
-      contact_high_ticks = 0;
-
-      bool current_high = current_ma() > CEILING_CURRENT_MA;
-      ceiling_high_ticks = current_high ? ceiling_high_ticks + 1 : 0;
-      at_ceiling = ceiling_high_ticks >= CONTACT_DEBOUNCE_TICKS;
-      if (at_ceiling) {
-        move(0);
-        return;
-      }
-    }
-
-    move(stick);
+    bool on_floor = sees_something && height_in <= TOLERANCE_IN;
+    move(stick < 0 && on_floor ? 0 : stick);
     return;
   }
 
-  // Reset here too, not just above -- these used to only get cleared
-  // inside the active-stick branch, so letting go of R1/R2 could leave
-  // TOUCHED or CEILING showing on the screen long after it was true.
-  placing_contact = false;
-  at_ceiling = false;
-  contact_high_ticks = 0;
-  ceiling_high_ticks = 0;
-
-  if (homing) {
-    if (!have_reading) {
-      // Nothing to measure against -- stop rather than guess.
-      homing = false;
-      move(0);
+  if (homing && sees_something) {
+    double error = target_in - height_in;
+    if (std::fabs(error) > TOLERANCE_IN) {
+      int speed = std::clamp(static_cast<int>(error * SEEK_GAIN), -SEEK_SPEED, SEEK_SPEED);
+      move(speed > 0 ? speed + GRAVITY_HOLD : speed);
       return;
     }
-    double error = target_in - in;
-    if (std::fabs(error) <= ARRIVED_TOLERANCE_IN) {
-      homing = false;
-      move(0);
-      return;
-    }
-    int speed = std::clamp(static_cast<int>(error * SEEK_GAIN), -SEEK_SPEED, SEEK_SPEED);
-    if (speed > 0) speed += GRAVITY_HOLD;
-    move(speed);
-    return;
   }
 
-  // Idle hold: just trust the motors' own brake mode (E_MOTOR_BRAKE_HOLD)
-  // to keep position, no active correction on top of it. Used to nudge
-  // the lift back with a small PID-style correction for gravity sag, but
-  // with the 2nd motor added, that correction was strong enough to send
-  // the lift running off in whatever direction it was already moving
-  // instead of holding still -- not worth chasing a new gain for when
-  // brake mode alone might already be plenty with double the torque.
-  // TODO(verify): watch for gravity sag over time now that this is
-  // gone -- if it comes back, this needs a bounded correction again.
-  move(0);
+  homing = false;  // arrived, or can't see anything to measure against
+  move(0);         // the motors' hold brake keeps the lift up
 }
 
 }  // namespace lift

@@ -1,14 +1,9 @@
 #pragma once
 
-// ============================================================================
-// PORTS AND DIRECTIONS
-// We keep every port and spin direction in one place so fixing a wiring
-// mistake is a one-line change here instead of a hunt through subsystem
-// code. Flip a DIR_* between 1 and -1 to reverse a motor or sensor. Ports
-// assume the back of the robot is facing you and the claw is facing away.
-// ============================================================================
+// Every port and direction in one place. Flip a DIR_* between 1 and -1 to
+// reverse a motor or sensor. Radio is on port 6 (needs no code).
 
-// --- Drivetrain (4-motor skid-steer: 2 left, 2 right) --- confirmed
+// --- Drivetrain (4-motor skid-steer) ---
 constexpr int DIR_DRIVE_LF = -1;
 constexpr int DIR_DRIVE_LB = -1;
 constexpr int DIR_DRIVE_RF = 1;
@@ -20,62 +15,22 @@ constexpr int PORT_DRIVE_RB = 15 * DIR_DRIVE_RB;
 
 constexpr int PORT_IMU = 10;
 
-// Radio is port 21 — plugged in as-is, PROS/VEXnet handle it automatically.
-
-// --- Horizontal (X-axis) tracking wheel; Y-axis comes from drive encoders ---
-// Mounted toward the back, off to the right (registered via
-// odom_tracker_back_set in main.cpp).
-constexpr int DIR_ODOM_HORIZONTAL = -1;  // confirmed: push robot right -> reading increases
+// --- Horizontal tracking wheel (sideways); forward/back comes from the drive encoders ---
+constexpr int DIR_ODOM_HORIZONTAL = -1;  // push robot right -> reading increases
 constexpr int PORT_ODOM_HORIZONTAL = 13 * DIR_ODOM_HORIZONTAL;
-constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches — confirmed
-
-// Distance from the tracking wheel to the robot's true turning center.
-// Not the left-right offset — EZ-Template's back/front trackers only
-// correct for front-back placement, and being off-center side to side
-// doesn't need a parameter here.
-//
-// Measured 2026-09-26 with calibrate_spin() (autons.cpp): spun the robot
-// 8 full rotations in place with this at 0.0 and read off how much
-// sideways drift the tracking wheel picked up from a move that should
-// have had none. We plug that number in directly, sign and all, rather
-// than assuming which sign means "in front" vs. "behind" — we don't have
-// visibility into which convention EZ-Template's odometry math actually
-// uses internally, and getting that guess wrong would be worse than just
-// trusting the number the test produced. Re-running calibrate_spin() now
-// checks chassis.odom_x_get()/odom_y_get() (the corrected position, not
-// the raw wheel reading) to confirm this actually zeroed the drift out.
+constexpr double ODOM_HORIZONTAL_WHEEL_DIAMETER = 2.0;  // inches
+// Front/back distance from the wheel to the turning center, measured 2026-09-26
+// by spinning 8 times in place and reading the sideways drift (sign as measured).
 constexpr double ODOM_HORIZONTAL_OFFSET = -1.97;
 
-// --- DR4B lift (2 motors on one shared shaft, second four-bar, 1:6
-// external reduction) --- 2nd motor added 2026-09-27 for more power/
-// precision. Being on the same physical shaft (not separate gearing per
-// side, like the old crooked 2-motor lift) means these two can't get out
-// of sync with each other -- no sync PID needed, just command both the
-// same, same as one motor with more torque. The rotation sensor sits on
-// the 72T (four-bar) shaft, past the reduction, so it tells us the arm's
-// real angle instead of us trusting either motor's own encoder through
-// the gear mesh. See lift.cpp for the full reasoning and how each one
-// gets used.
+// --- DR4B lift: 2 motors on one shaft + rotation sensor on the arm shaft ---
 constexpr int DIR_LIFT = 1;
 constexpr int PORT_LIFT = 1 * DIR_LIFT;
-
-// Bench-confirmed 2026-09-27: needed the opposite sign from the first
-// motor to actually help it instead of fighting it.
-constexpr int DIR_LIFT_2 = -1;
+constexpr int DIR_LIFT_2 = -1;  // opposite of the first motor so they push together
 constexpr int PORT_LIFT_2 = 5 * DIR_LIFT_2;
-
 constexpr int DIR_LIFT_ROTATION = -1;
 constexpr int PORT_LIFT_ROTATION = 8 * DIR_LIFT_ROTATION;
 
-// --- Claw (1 solenoid + 1 distance sensor, pointing down) --- confirmed
-// The distance sensor reads whatever's directly under the claw (true
-// floor, or the top of an existing stack) -- lift.cpp uses it to figure
-// out real placement heights instead of guessing them. Port confirmed
-// accurate 2026-09-27.
+// --- Claw: 1 solenoid + 1 distance sensor pointing down (lift height comes from it) ---
 constexpr char PORT_CLAW_SOLENOID = 'A';
-constexpr int PORT_CLAW_DISTANCE = 6;
-
-// --- Toggle spinner + color sensor --- confirmed
-constexpr int DIR_TOGGLE_SPINNER = -1;
-constexpr int PORT_TOGGLE_SPINNER = 17 * DIR_TOGGLE_SPINNER;
-constexpr int PORT_TOGGLE_COLOR_SENSOR = 18;
+constexpr int PORT_CLAW_DISTANCE = 21;
