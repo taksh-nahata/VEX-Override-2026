@@ -4,4 +4,5 @@ void default_constants();
 
 void auton_button_1();
 void auton_button_1_other_side();
+void skills_auton(); 
 void tune_test();  // "Drive Test": 24in drive + 90deg turn

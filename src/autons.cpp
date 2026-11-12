@@ -1,6 +1,5 @@
 #include "main.h"
 
-// TODO(tune): last season's numbers for a different robot, not measured on this one yet.
 void default_constants() {
   chassis.pid_drive_constants_set(20.0, 0.0, 100.0);
   chassis.pid_heading_constants_set(11.0, 0.0, 20.0);
@@ -28,8 +27,7 @@ void default_constants() {
   chassis.odom_boomerang_dlead_set(0.625);     // how aggressive boomerang ends are
 }
 
-// Keeps calling lift::update(0) until a go_to_height() move settles -- the
-// lift only actually moves while something calls update(), unlike the chassis's own PID.
+// the lift only moves while update() is being called, so this keeps calling it until it gets there
 void lift_wait(std::uint32_t timeout_ms = 1000) {
   std::uint32_t start = pros::millis();
   while (lift::is_homing() && pros::millis() - start < timeout_ms) {
@@ -38,11 +36,7 @@ void lift_wait(std::uint32_t timeout_ms = 1000) {
   }
 }
 
-// AUTON: BUTTON 1 -- "Cup+Goal", the current main plan. All distances/angles below are
-// placeholders -- pace them out for real. TODO(verify): drop-then-grab assumed to be a plain
-// open-then-close on the same claw, not confirmed against the real mechanism.
-// Absolute positioning: (x, y) in inches from the start, +y = the way the robot faces at
-// the start, +x = to its right. Odom moves turn toward each point on their own.
+// Cup+Goal R. positions are x, y in inches from the start, +y is forward and +x is right
 void auton_button_1() {
   chassis.odom_xyt_set(0_in, 0_in, 0_deg);  // starting pose
   chassis.pid_odom_set({{0_in, 5_in}, ez::fwd, 110}, true);
@@ -73,7 +67,7 @@ void auton_button_1() {
   claw::close();  // grab the cup
   pros::delay(100);
   chassis.pid_odom_set({{-5_in, 15_in}, ez::rev, 100}, true);
-  lift::go_to_height(12.0);  // lift the cup up a bit so it doesn't scrape the ground while driving and lifts to goal +pin height
+  lift::go_to_height(12.0);  // lifts the cup so it doesn't scrape
   lift_wait();
   chassis.pid_wait();
   chassis.pid_turn_set({8.5,11.5},fwd,90);
@@ -92,8 +86,7 @@ void auton_button_1() {
   chassis.pid_wait();
 }
 
-// "Cup+Goal L" is the reflection of auton_button_1() across the robot's
-// starting forward axis: x coordinates and explicit headings are negated.
+// Cup+Goal L, the mirror of R
 void auton_button_1_other_side() {
   chassis.odom_xyt_set(0_in, 0_in, 0_deg);  // starting pose
   chassis.pid_odom_set({{0_in, 5_in}, ez::fwd, 110}, true);
@@ -119,7 +112,7 @@ void auton_button_1_other_side() {
   claw::close();  // grab the cup
   pros::delay(100);
   chassis.pid_odom_set({{5_in, 10_in}, ez::rev, 100}, true);
-  lift::go_to_height(12.0);  // lift the cup so it does not scrape while driving
+  lift::go_to_height(12.0);  // lifts the cup so it doesn't scrape
   lift_wait();
   chassis.pid_wait();
   chassis.pid_turn_set({-11_in, 7_in}, fwd, 90);
@@ -138,7 +131,51 @@ void auton_button_1_other_side() {
   chassis.pid_wait();
 }
 
-// "Drive Test" in the selector: drives 24in, then turns 90deg -- for checking PID constants.
+void skills_auton() {
+  chassis.odom_xyt_set(0_in, 0_in, 0_deg);  // starting pose
+  chassis.pid_odom_set({{0_in, 5_in}, ez::fwd, 110}, true);
+  chassis.pid_wait();
+  chassis.pid_odom_set({{0_in, -5_in}, ez::rev, 110}, true);
+  chassis.pid_wait();
+  chassis.pid_odom_set({{0_in, 0_in}, ez::fwd, 110}, true);
+  chassis.pid_wait();
+  chassis.pid_odom_set({{0_in, -5_in}, ez::rev, 110}, true);
+  chassis.pid_wait();
+  chassis.pid_odom_set({{9.5_in, 11_in, 55_deg}, ez::fwd, 90}, true);  // the goal
+  lift::go_to_height(5.5);  // alliance goal
+  lift_wait();
+  chassis.pid_wait();
+  lift::go_to_height(3.0);
+  lift_wait();
+  claw::open();   // drop the pin into the goal
+  pros::delay(300);
+  chassis.pid_odom_set({{-3_in, 4_in}, ez::rev, 100}, true);
+  lift::go_to_height(5.0);  // cup pickup
+  lift_wait();
+  chassis.pid_wait();
+  chassis.pid_turn_set({-8_in, 7_in}, ez::fwd, 100);
+  chassis.pid_wait_quick_chain();
+  claw::close_when_pin();  // cup is around 14, 32.5
+  chassis.pid_odom_set({{{-5_in, 7_in}, ez::fwd, 90},
+                      {{9_in, 34_in, 45_deg}, ez::fwd, 60}}, true);
+  chassis.pid_wait();
+  claw::close();  // grab the cup
+  pros::delay(100);
+  chassis.pid_turn_set({14_in, 18_in}, ez::fwd, 80);
+  lift::go_to_height(18.0);
+  lift_wait();
+  chassis.pid_wait_quick_chain();
+  chassis.pid_odom_set({{14_in, 18_in, 140_deg}, ez::fwd, 80}, true);
+  chassis.pid_wait();
+  lift::go_to_height(10.0);
+  lift_wait();
+  claw::open();  // drop the cup into the goal
+  pros::delay(200);
+  chassis.pid_odom_set({{-3_in, 45_in}, ez::rev, 100}, true);
+  chassis.pid_wait();
+}
+
+// drives 24in then turns 90, for checking the pid
 void tune_test() {
   chassis.pid_drive_set(24_in, 90, true);
   chassis.pid_wait();

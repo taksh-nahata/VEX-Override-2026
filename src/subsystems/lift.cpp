@@ -1,4 +1,3 @@
-// Only the plain PROS API here -- main.h's EZ-Template includes are slow to compile.
 #include "api.h"
 #include "globals.hpp"
 #include "subsystems/lift.hpp"
@@ -8,55 +7,49 @@
 
 namespace lift {
 
-// Two motors on one shaft, always commanded the same. Plain pros::Motor, not
-// MotorGroup (MotorGroup gave a link error against this project's PROS library).
+// two motors on one shaft (MotorGroup gave a link error)
 pros::Motor motor(PORT_LIFT, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
 pros::Motor motor_2(PORT_LIFT_2, pros::v5::MotorGears::green, pros::v5::MotorUnits::degrees);
-pros::Rotation rotation(PORT_LIFT_ROTATION);  // only for position() (anti-tip)
+pros::Rotation rotation(PORT_LIFT_ROTATION);  // for position()
 pros::Distance claw_distance(PORT_CLAW_DISTANCE);  // height comes from this
 
-// TODO(tune)
-constexpr double SEEK_GAIN = 15.0;   // motor speed per inch of error
-constexpr int SEEK_SPEED = 100;      // max speed while seeking
-constexpr int GRAVITY_HOLD = 15;     // extra push when going up
-constexpr double TOLERANCE_IN = 0.4; // close enough to the target / the floor
+constexpr double SEEK_GAIN = 15.0;    // speed per inch of error
+constexpr int SEEK_SPEED = 100;       // max speed going to a height
+constexpr int GRAVITY_HOLD = 15;      // extra push going up
+constexpr double TOLERANCE_IN = 0.4;  // close enough
 
-bool homing = false;  // true while a go_to_*() move is running
+bool homing = false;
 double target_in = 0;
 
 
 void initialize() {
   motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   motor_2.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  // No reset here: raw_angle() is absolute, so it's the same no matter where the lift boots.
 }
 
-// TODO(measure): lift all the way down, read "raw" on the brain (line 1), put it here.
-constexpr double LIFT_BOTTOM_DEG = 244.2;  // measured 2026-10-18
+constexpr double LIFT_BOTTOM_DEG = 244.2;  // raw reading with the lift all the way down
 
 double raw_angle() {
-  return rotation.get_angle() / 100.0;  // absolute 0-360, centidegrees -> degrees
+  return rotation.get_angle() / 100.0;
 }
 
 double position() {
-  double deg = LIFT_BOTTOM_DEG - raw_angle();  // degrees above the bottom (raw goes DOWN as the lift goes up)
-  if (deg > 180) deg -= 360;  // in case the sensor's 0/360 point falls inside the lift's travel
+  double deg = LIFT_BOTTOM_DEG - raw_angle();  // raw goes down as the lift goes up
+  if (deg > 180) deg -= 360;  // in case 0/360 is inside the lift's travel
   if (deg < -180) deg += 360;
   return deg;
 }
 
-// Hard limits, in "pos" degrees (0 = bottom, ~103 = physical top). Every motor command
-// goes through here, so nothing (R1/R2, presets) can push past them.
+// limits in position() degrees, everything goes through move()
 constexpr double LIFT_MIN_DEG = 0;
 constexpr double LIFT_MAX_DEG = 100;
-// TODO(tune): momentum carries the lift past a limit, so it slows down over the last
-// SLOW_ZONE_DEG before one: max speed shrinks to 0 at the limit, never below CREEP.
+// slows down near the limits so momentum doesn't carry it past
 constexpr double SLOW_ZONE_DEG = 30;
 constexpr int CREEP = 25;
 
 void move(int voltage) {
   double raw = raw_angle();
-  if (raw <= 360) {  // a failed sensor read is huge -- then don't limit on garbage
+  if (raw <= 360) {  // a failed read is huge, skip the limits then
     double pos = position();
     double left = voltage > 0 ? LIFT_MAX_DEG - pos : pos - LIFT_MIN_DEG;  // degrees to the limit ahead
     if (voltage != 0) {
@@ -83,21 +76,19 @@ bool is_homing() {
   return homing;
 }
 
-// Only sets the target -- update() does the moving.
 void go_to_height(double inches) {
   target_in = inches;
   homing = true;
 }
 
-void go_to_cup_and_pin() { go_to_height(4.3); }
+void go_to_cup_and_pin() { go_to_height(4.5); }
 
-// Call every loop. stick is +127 (up), -127 (down) or 0.
 void update(int stick) {
   int mm = claw_distance.get();
-  bool sees_something = mm > 0 && mm < 9999;  // 9999 = nothing in range
+  bool sees_something = mm > 0 && mm < 9999;  // 9999 = sees nothing
   double height_in = mm / 25.4;
 
-  if (std::abs(stick) > 10) {  // driver is pushing: cancel any preset
+  if (std::abs(stick) > 10) {  // manual control cancels the preset
     homing = false;
     bool on_floor = sees_something && height_in <= TOLERANCE_IN;
     move(stick < 0 && on_floor ? 0 : stick);
@@ -113,8 +104,8 @@ void update(int stick) {
     }
   }
 
-  homing = false;  // arrived, or can't see anything to measure against
-  move(0);         // the motors' hold brake keeps the lift up
+  homing = false;
+  move(0);  // hold brake keeps it up
 }
 
 }  // namespace lift
