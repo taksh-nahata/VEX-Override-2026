@@ -23,7 +23,7 @@ Code for our V5RC Override robot. PROS 4 + EZ-Template.
 - A: lift to cup + pin height, opens the claw, and the claw closes by itself when a pin gets close
 - L1: open / close the claw
 - LEFT / RIGHT: pick the auton (shows on the controller)
-- DOWN: run the selected auton from driver control, for testing
+- DOWN: run the selected auton from driver control for testing (disabled at comps)
 
 ## Autons
 

@@ -122,8 +122,8 @@ void opcontrol() {
     debug_screen();
     drive_with_anti_tip();
 
-    // runs the selected auton without a comp switch, for testing
-    if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
+    // runs the selected auton for testing, only when not plugged into a field or comp switch
+    if (!pros::competition::is_connected() && master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN)) {
       master.print(2, 0, "RUNNING AUTON");
       auton_options[auton_index].fn();
     }
