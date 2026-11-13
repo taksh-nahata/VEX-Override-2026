@@ -14,6 +14,7 @@ double close_mm();
 double closed_at_mm();
 double closed_speed();
 
+bool closed();
 void open();
 void close();
 void toggle();

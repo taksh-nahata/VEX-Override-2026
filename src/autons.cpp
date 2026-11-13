@@ -139,7 +139,7 @@ void skills_auton() {
   chassis.pid_wait();
   chassis.pid_odom_set({{0_in, 0_in}, ez::fwd, 110}, true);
   chassis.pid_wait();
-  chassis.pid_odom_set({{0_in, -5_in}, ez::rev, 110}, true);
+  chassis.pid_odom_set({{0_in, -5_in}, ez::rev, 120}, true);
   chassis.pid_wait();
   chassis.pid_odom_set({{9.5_in, 11_in, 55_deg}, ez::fwd, 90}, true);  // the goal
   lift::go_to_height(5.5);  // alliance goal
@@ -155,11 +155,13 @@ void skills_auton() {
   chassis.pid_wait();
   chassis.pid_turn_set({-8_in, 7_in}, ez::fwd, 100);
   chassis.pid_wait_quick_chain();
-  claw::close_when_pin();  // cup is around 14, 32.5
+  claw::close_when_pin();  // cup is around 9, 34
   chassis.pid_odom_set({{{-5_in, 7_in}, ez::fwd, 90},
-                      {{9_in, 34_in, 45_deg}, ez::fwd, 60}}, true);
-  chassis.pid_wait();
-  claw::close();  // grab the cup
+                      {{9_in, 34_in, 45_deg}, ez::fwd, 60},
+                      {{12_in, 37_in, 45_deg}, ez::fwd, 40}}, true);  // last point is past the cup in case it's farther
+  std::uint32_t start = pros::millis();
+  while (!claw::closed() && chassis.drive_mode_get() != ez::DISABLE && pros::millis() - start < 4000) pros::delay(10);
+  chassis.drive_mode_set(ez::DISABLE);  // stops driving once the claw closes
   pros::delay(100);
   chassis.pid_turn_set({14_in, 18_in}, ez::fwd, 80);
   lift::go_to_height(18.0);
@@ -171,7 +173,38 @@ void skills_auton() {
   lift_wait();
   claw::open();  // drop the cup into the goal
   pros::delay(200);
-  chassis.pid_odom_set({{-3_in, 45_in}, ez::rev, 100}, true);
+  chassis.pid_odom_set({{0_in, 32_in}, ez::rev, 80}, true);
+  chassis.pid_wait();
+  chassis.pid_turn_set({20,35}, ez::fwd, 80);
+  lift::go_to_height(4.5);
+  lift_wait();
+  chassis.pid_wait_quick_chain();
+  claw::close_when_pin();  // pin is around 25, 10. armed after backing off so it doesn't see the cup we just dropped
+  chassis.pid_odom_set({{20_in, 35_in}, ez::fwd, 100}, true);
+  chassis.pid_wait();
+  chassis.pid_turn_set({40, 9.5}, ez::fwd, 80);
+  chassis.pid_wait_quick_chain();
+  chassis.pid_odom_set({{{43_in, 9.5_in}, ez::fwd, 50},
+                        {{46_in, 6.5_in}, ez::fwd, 40}}, true);  // last point is past the pin in case it's farther
+  start = pros::millis();
+  while (!claw::closed() && chassis.drive_mode_get() != ez::DISABLE && pros::millis() - start < 4000) pros::delay(10);
+  chassis.drive_mode_set(ez::DISABLE);
+  pros::delay(200);
+  chassis.pid_turn_set({18, 11}, ez::fwd, 80);
+  chassis.pid_wait_quick_chain();
+  chassis.pid_odom_set({{15_in, 11_in}, ez::fwd, 40}, true);
+  lift::go_to_height(20.0);
+  lift_wait();
+  chassis.pid_wait();
+  lift::go_to_height(17.0);
+  lift_wait();
+  claw::open();  // drop the pin into the goal
+  pros::delay(200);
+  chassis.pid_odom_set({{43_in, 9.5_in}, ez::rev, 80}, true);
+  chassis.pid_wait();
+  chassis.pid_turn_set({0, 50}, ez::fwd, 80);
+  chassis.pid_wait_quick_chain();
+  chassis.pid_odom_set({{0_in, 50_in}, ez::fwd, 100}, true);
   chassis.pid_wait();
 }
 

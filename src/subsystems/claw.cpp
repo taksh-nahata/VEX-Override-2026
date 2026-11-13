@@ -36,6 +36,8 @@ void close() {
   is_closed = true;
 }
 
+bool closed() { return is_closed; }
+
 void close_when_pin() { armed = true; }
 
 void set_pos_fn(double (*inches)()) { pos_fn = inches; }
